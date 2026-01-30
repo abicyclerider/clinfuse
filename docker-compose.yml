@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  synthea:
+    image: synthetichealth/synthea:latest
+    container_name: synthea_generator
+    volumes:
+      - ./output/synthea_raw:/output
+      - ./config/synthea.properties:/synthea.properties:ro
+    environment:
+      - JAVA_OPTS=-Xmx4g
+    command: >
+      -p 500
+      -s 12345
+      --exporter.baseDirectory=/output
+      --exporter.csv.export=true
+      --exporter.fhir.export=false
+      Massachusetts
+    networks:
+      - synthea_network
+
+networks:
+  synthea_network:
+    driver: bridge

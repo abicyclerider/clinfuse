@@ -1,0 +1,213 @@
+# SyntheticMass Configuration File
+# ==================================
+# All error rates, percentages, and thresholds for synthetic medical dataset generation.
+#
+# IMPORTANT NOTES:
+# - Percentages can overlap and sum to > 1.0 (patients can have multiple attributes)
+# - Setting any percentage to 1.0 makes ALL patients that case type
+# - Error rates are based on healthcare research (configurable for experimentation)
+# - No hardcoded values allowed in Python code - all values must read from this config
+
+# =============================================================================
+# POPULATION SETTINGS
+# =============================================================================
+population:
+  base_size: 500  # Number of patients to generate from Synthea
+
+# =============================================================================
+# SPECIAL CASES (Hard Test Cases)
+# =============================================================================
+# These transform base Synthea patients into challenging entity resolution scenarios.
+# Percentages can overlap - a patient can be BOTH a twin AND have a common name.
+# Set percentage to 1.0 to make ALL patients that type (useful for isolated testing).
+
+special_cases:
+  twins:
+    enabled: true
+    percentage: 0.10  # 10% of patients will be twins (identical DOB, similar names, same address)
+
+  jr_sr:
+    enabled: true
+    percentage: 0.10  # 10% will be Jr/Sr pairs (same name, 25-35 year gap, similar addresses)
+    age_gap_min: 25
+    age_gap_max: 35
+
+  common_names:
+    enabled: true
+    percentage: 0.15  # 15% will have high-collision names like "John Smith"
+    # Common first names (high collision probability)
+    first_names:
+      - John
+      - Mary
+      - James
+      - Patricia
+      - Robert
+      - Jennifer
+      - Michael
+      - Linda
+      - William
+      - Barbara
+    # Common last names
+    last_names:
+      - Smith
+      - Johnson
+      - Williams
+      - Brown
+      - Jones
+      - Garcia
+      - Miller
+      - Davis
+      - Rodriguez
+      - Martinez
+
+  overlays:
+    enabled: true
+    percentage: 0.05  # 5% will be dangerous overlays (Patient A demographics + Patient B history)
+
+# =============================================================================
+# DUPLICATE GENERATION RATES
+# =============================================================================
+# Controls how many duplicates each patient gets.
+# Percentages must sum to 1.0.
+
+duplicates:
+  no_duplicate: 0.25      # 25% of patients remain unique (no duplicates)
+  single_duplicate: 0.50  # 50% get exactly 1 duplicate
+  multiple_duplicate: 0.20 # 20% get 2-3 duplicates
+  hard_case: 0.05         # 5% get 4-6 duplicates (stress test)
+
+  # Range for multiple_duplicate category
+  multiple_duplicate_range:
+    min: 2
+    max: 3
+
+  # Range for hard_case category
+  hard_case_range:
+    min: 4
+    max: 6
+
+# =============================================================================
+# ERROR DISTRIBUTION (Research-Based Rates)
+# =============================================================================
+# Default error rates from healthcare entity resolution research.
+# These represent the probability that a duplicate will have this type of error.
+# Percentages sum to >100% because duplicates typically have MULTIPLE errors.
+#
+# Sources:
+# - Middle name, SSN, name typos: Healthcare data quality studies
+# - Address, date variations: Medical records research
+# - Missing fields: EHR data completeness analysis
+
+error_distribution:
+  middle_name_discrepancy: 0.583  # 58.3% - middle initial vs full name, missing, etc.
+  ssn_error: 0.535                # 53.5% - transposition, typo, missing
+  first_name_typo: 0.531          # 53.1% - keyboard proximity, OCR errors
+  last_name_typo: 0.336           # 33.6% - spelling variations, typos
+  address_variation: 0.35         # 35% - abbreviations, formatting differences
+  date_variation: 0.25            # 25% - format differences, transposition
+  missing_field: 0.45             # 45% - one or more fields missing
+
+# =============================================================================
+# ERROR INJECTION SETTINGS (Advanced Configuration)
+# =============================================================================
+# Fine-grained control over error generation behavior.
+
+error_injection:
+
+  # Typo generation (keyboard proximity-based)
+  typo_types:
+    substitution: 0.60    # Replace one character with nearby key (e.g., "John" -> "Joh n")
+    deletion: 0.20        # Remove one character (e.g., "Smith" -> "Smth")
+    insertion: 0.10       # Add one character (e.g., "Mary" -> "Marty")
+    transposition: 0.10   # Swap adjacent characters (e.g., "Robert" -> "Robret")
+
+  # Address variation types
+  address_types:
+    abbreviation: 0.40    # "Street" -> "St", "Avenue" -> "Ave"
+    formatting: 0.30      # "123 Main St" -> "123 MAIN ST", case/spacing changes
+    unit_variation: 0.15  # "Apt 5" -> "Unit 5" -> "#5"
+    typo: 0.15            # Minor spelling errors in street names
+
+  # Date variation types
+  date_types:
+    format_change: 0.50   # "1985-03-15" -> "03/15/1985" -> "15-Mar-1985"
+    day_month_swap: 0.25  # "03/15/1985" -> "15/03/1985" (US vs international)
+    transposition: 0.15   # "1985-03-15" -> "1985-03-51" (digit swap)
+    ocr_error: 0.10       # "1985" -> "1985" (1/l, 0/O confusion)
+
+  # Missing field behavior
+  missing_field_types:
+    middle_name: 0.35     # Most commonly missing
+    ssn: 0.25             # Often withheld or incomplete
+    phone: 0.20           # Frequently not provided
+    address_line2: 0.15   # Apartment/unit numbers
+    email: 0.05           # Less commonly missing in modern records
+
+# =============================================================================
+# KEYBOARD PROXIMITY MAP
+# =============================================================================
+# Used for realistic typo generation based on QWERTY keyboard layout.
+# Each key maps to its physically adjacent keys.
+
+keyboard_proximity:
+  a: [q, w, s, z]
+  b: [v, g, h, n]
+  c: [x, d, f, v]
+  d: [s, e, r, f, c, x]
+  e: [w, r, d, s]
+  f: [d, r, t, g, v, c]
+  g: [f, t, y, h, b, v]
+  h: [g, y, u, j, n, b]
+  i: [u, o, k, j]
+  j: [h, u, i, k, m, n]
+  k: [j, i, o, l, m]
+  l: [k, o, p]
+  m: [n, j, k]
+  n: [b, h, j, m]
+  o: [i, p, l, k]
+  p: [o, l]
+  q: [w, a]
+  r: [e, t, f, d]
+  s: [a, w, e, d, x, z]
+  t: [r, y, g, f]
+  u: [y, i, j, h]
+  v: [c, f, g, b]
+  w: [q, e, s, a]
+  x: [z, s, d, c]
+  y: [t, u, h, g]
+  z: [a, s, x]
+
+# =============================================================================
+# OUTPUT SETTINGS
+# =============================================================================
+output:
+  directory: output
+  patients_file: patients_with_duplicates.csv
+  ground_truth_file: ground_truth.csv
+  metadata_file: ground_truth_metadata.json
+
+  # CSV formatting
+  csv_encoding: utf-8
+  csv_delimiter: ","
+  include_headers: true
+
+# =============================================================================
+# VALIDATION SETTINGS
+# =============================================================================
+# Thresholds for data quality validation.
+
+validation:
+  # Error distribution tolerance (actual vs configured rates)
+  error_rate_tolerance: 0.05  # ±5% acceptable variance
+
+  # Ground truth completeness
+  require_100_percent_coverage: true  # Every record must have entity_id
+
+  # Duplicate count validation
+  min_duplicates_expected: 300  # Based on 75% of 500 patients getting ≥1 duplicate
+  max_duplicates_expected: 2000 # Upper bound for sanity check
+
+# =============================================================================
+# RANDOM SEED (for reproducibility)
+# =============================================================================
+random_seed: 42  # Set to null for non-deterministic generation
