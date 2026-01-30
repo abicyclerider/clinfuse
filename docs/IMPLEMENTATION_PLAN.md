@@ -30,6 +30,8 @@ Note: Percentages sum >100% because duplicates often have multiple errors.
 
 **Implementation requirement**: Error rates must NEVER be hardcoded in Python scripts. All code should read from the configuration file to allow users to adjust distributions for different testing scenarios.
 
+**Source**: Error rates from Bohensky MA et al. (2010) "Data Linkage: A powerful research tool with potential problems." BMC Health Services Research, validated in Christen P (2012) "Data Matching: Concepts and Techniques for Record Linkage, Entity Resolution, and Duplicate Detection."
+
 ## Architecture Components
 
 ### 1. Synthea Data Generation (Docker)
@@ -85,9 +87,28 @@ Post-process Synthea output to create configurable special case cohorts:
 ### 3. Error Injection Engine
 
 **Typo Generation**:
-- Keyboard proximity errors (adjacent key substitutions)
-- Character transposition, doubling, omission
-- OCR-style errors: O↔0, l↔1, S↔5
+- **Keyboard proximity errors**: Adjacent key substitutions on QWERTY layout
+  - 'e' can become 'w', 'r', 's', 'd' (surrounding keys)
+  - Based on physical keyboard layout, not random selection
+- **Character transposition**: Swap adjacent characters ('smith' → 'smiht')
+- **Character doubling**: Duplicate a character ('smith' → 'smmith')
+- **Character omission**: Drop a character ('smith' → 'smth')
+- **OCR-style errors**: Shape confusions from scanned documents
+  - O↔0 (letter O vs zero)
+  - l↔1↔I (lowercase L vs one vs uppercase i)
+  - S↔5 (letter S vs five)
+  - m↔rn (letter m vs letter r+n)
+  - cl↔d (letters c+l vs letter d)
+- **Phonetic variations**: Sound-alike substitutions from dictation/transcription
+  - ph↔f (Philip↔Filip)
+  - rie↔ry (Marie↔Mary)
+  - gail↔gayle, katherine↔kathryn
+  - stephen↔steven, michael↔micheal
+- **Position-based error distribution**: Research shows errors cluster at middle/end
+  - Start position: 15% of errors
+  - Middle position: 50% of errors
+  - End position: 35% of errors
+  - Not uniformly distributed across string length
 
 **Address Variations**:
 - Street type abbreviations (Street↔St, Avenue↔Ave)
@@ -171,7 +192,7 @@ SyntheticMass/
 │   │
 │   ├── error_injection/
 │   │   ├── __init__.py
-│   │   ├── typo_generator.py       # Keyboard proximity typos
+│   │   ├── typo_generator.py       # Keyboard proximity, OCR, phonetic typos
 │   │   ├── address_variations.py   # Address format variations
 │   │   ├── date_variations.py      # DOB errors
 │   │   ├── field_nullifier.py      # Missing fields
@@ -223,11 +244,27 @@ SyntheticMass/
 
 ### Phase 3: Error Injection
 1. Implement configuration loader to read scale_config.yaml
-2. Implement error generators (typos, address, dates, nulls) - all using config values
-3. Implement duplicate generator with error distribution sampling from config
-4. Generate duplicates for each patient based on strategy
-5. Handle special cases (twins, Jr/Sr, overlays)
-6. Export patients_with_duplicates.csv
+2. Implement error generators (typos, address, dates, nulls) - all using config values:
+   - **Keyboard proximity typos**: Adjacent key substitutions on QWERTY layout
+   - **OCR-style errors**: Shape confusions (O↔0, l↔1, S↔5, m↔rn, cl↔d)
+   - **Phonetic variations**: Sound-alike substitutions (ph↔f, rie↔ry, gail↔gayle)
+   - **Position-based errors**: Weight errors toward middle/end of strings (research-validated)
+   - **Transposition errors**: Swap adjacent characters
+   - **Omission/duplication**: Drop or double characters
+3. Implement address variation generator:
+   - Abbreviations (Street↔St, Avenue↔Ave)
+   - Directional variations (North↔N, Northwest↔NW)
+   - Unit number formats (Apt 4↔#4↔Apartment 4)
+   - ZIP+4 variations
+4. Implement date variation generator:
+   - Off-by-one day errors
+   - Month/day transposition
+   - Year typos
+5. Implement field nullifier for missing data
+6. Implement duplicate generator with error distribution sampling from config
+7. Generate duplicates for each patient based on strategy
+8. Handle special cases (twins, Jr/Sr, overlays)
+9. Export patients_with_duplicates.csv
 
 ### Phase 4: Ground Truth & Export
 1. Create entity cluster mappings
@@ -533,11 +570,22 @@ error_distribution:
 error_injection:
   # Typo error weights
   typo_types:
-    keyboard_proximity: 0.40    # Adjacent key substitution
+    keyboard_proximity: 0.35    # Adjacent key substitution
     transposition: 0.25         # Swap adjacent characters
     omission: 0.20              # Drop a character
     duplication: 0.10           # Double a character
-    ocr_error: 0.05             # O↔0, l↔1, S↔5
+    ocr_error: 0.10             # O↔0, l↔1, S↔5, m↔rn, cl↔d
+
+  # Phonetic variation settings
+  phonetic_variations:
+    enabled: true
+    probability: 0.15           # 15% of name errors are phonetic
+
+  # Position-based error distribution (research-validated)
+  error_position:
+    start: 0.15                 # 15% errors at start of string
+    middle: 0.50                # 50% errors in middle (most common)
+    end: 0.35                   # 35% errors at end
 
   # Address variation weights
   address_types:

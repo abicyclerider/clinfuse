@@ -1,0 +1,3 @@
+[submodule "synthea-docker"]
+	path = synthea-docker
+	url = https://github.com/mrreband/synthea-docker.git
