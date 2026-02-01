@@ -1,0 +1,10 @@
+{
+  "disabledMcpjsonServers": [
+    "odin-project-react"
+  ],
+  "permissions": {
+    "allow": [
+      "WebSearch"
+    ]
+  }
+}
