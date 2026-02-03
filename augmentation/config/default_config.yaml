@@ -1,7 +1,7 @@
 # Default configuration for Entity Resolution Data Augmentation System
 
 facility_distribution:
-  num_facilities: 10
+  num_facilities: 5
   strategy: "chronological_switching"
 
   # Weighted distribution of patients across facilities
@@ -21,11 +21,11 @@ facility_distribution:
   primary_facility_weight: 0.60
 
 error_injection:
-  # 35% of patient records will have at least one error
-  global_error_rate: 0.35
+  # 100% of patient records will have at least one error
+  global_error_rate: 1.0
 
   # 20% chance of multiple errors (given at least one error)
-  multiple_errors_probability: 0.20
+  multiple_errors_probability: 0.5
 
   # Relative weights for error types
   # These will be refined based on research findings
