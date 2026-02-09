@@ -1,5 +1,5 @@
 """
-Test RunPod Serverless vLLM endpoint for MedGemma 27B.
+Test RunPod Pod vLLM endpoint for MedGemma 27B.
 
 Verifies connectivity, model availability, and benchmarks throughput.
 
@@ -16,27 +16,21 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 
-def get_client() -> tuple[OpenAI, str]:
-    """Load .env and create OpenAI client pointing at RunPod."""
-    # Load .env from runpod-gpu/ directory
+def get_client() -> OpenAI:
+    """Load .env and create OpenAI client pointing at RunPod Pod."""
     env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
     load_dotenv(env_path)
 
-    api_key = os.environ.get('RUNPOD_API_KEY')
-    endpoint_id = os.environ.get('RUNPOD_ENDPOINT_ID')
-
-    if not api_key:
-        print("ERROR: RUNPOD_API_KEY not set. Copy .env.template to .env and fill in your key.")
-        sys.exit(1)
-    if not endpoint_id:
-        print("ERROR: RUNPOD_ENDPOINT_ID not set. Copy .env.template to .env and fill in your endpoint ID.")
+    pod_id = os.environ.get('RUNPOD_POD_ID')
+    if not pod_id:
+        print("ERROR: RUNPOD_POD_ID not set. Copy .env.template to .env and fill in your Pod ID.")
         sys.exit(1)
 
-    base_url = f"https://api.runpod.ai/v2/{endpoint_id}/openai/v1"
+    base_url = f"https://{pod_id}-8000.proxy.runpod.net/v1"
     print(f"Base URL: {base_url}")
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    return client, endpoint_id
+    client = OpenAI(api_key="not-needed", base_url=base_url)
+    return client
 
 
 def test_models(client: OpenAI):
@@ -69,9 +63,7 @@ def test_simple_completion(client: OpenAI, model: str):
     content = response.choices[0].message.content
     usage = response.usage
 
-    # Check for thinking tokens
-    has_thinking = '<unused94>' in content if content else False
-    if has_thinking:
+    if content and '<unused94>' in content:
         print("  WARNING: Response contains thinking tokens (<unused94>)")
         print("  You may need extract_answer() to strip them.")
 
@@ -126,15 +118,15 @@ Are these the same patient? Respond with:
 
 
 def main():
-    print("=== RunPod MedGemma 27B Endpoint Test ===")
+    print("=== RunPod MedGemma 27B Pod Test ===")
 
-    client, endpoint_id = get_client()
+    client = get_client()
 
     # Test 1: List models
     model = test_models(client)
     if not model:
-        print("\nNo models found. The endpoint may still be loading (cold start ~5-10 min).")
-        print("Check the RunPod dashboard for endpoint status.")
+        print("\nNo models found. The vLLM server may still be loading.")
+        print("Check the Pod's web terminal for server startup progress.")
         sys.exit(1)
 
     # Test 2: Simple completion

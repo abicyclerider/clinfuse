@@ -3,8 +3,8 @@ base_dir: "/Users/alex/repos/Kaggle/SyntheticMass"
 
 model:
   name: "google/medgemma-27b-text-it"
-  api_base: "https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/openai/v1"
-  api_key_env: "RUNPOD_API_KEY"
+  api_base: "https://${RUNPOD_POD_ID}-8000.proxy.runpod.net/v1"
+  api_key: "not-needed"
   temperature: 0.1
   max_tokens: 256
 
