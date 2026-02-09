@@ -15,7 +15,9 @@ import logging
 import argparse
 
 import os
+import re
 
+from dotenv import load_dotenv
 import dspy
 import pandas as pd
 
@@ -144,12 +146,32 @@ def run_optimization(config: dict):
     Args:
         config: Configuration dictionary
     """
-    # Configure DSPy task LM (local MedGemma)
+    # Load .env file (for API keys)
+    load_dotenv()
+
+    # Configure DSPy task LM
     model_config = config['model']
+
+    # Resolve API key: support api_key_env (env var name) or direct api_key
+    if 'api_key_env' in model_config:
+        api_key = os.environ.get(model_config['api_key_env'], '')
+        if not api_key:
+            raise ValueError(f"${model_config['api_key_env']} not set in environment")
+    else:
+        api_key = model_config['api_key']
+
+    # Resolve api_base: substitute ${VAR} references from environment
+    api_base = model_config['api_base']
+    api_base = re.sub(
+        r'\$\{(\w+)\}',
+        lambda m: os.environ.get(m.group(1), m.group(0)),
+        api_base,
+    )
+
     task_lm = dspy.LM(
         model=f"openai/{model_config['name']}",
-        api_base=model_config['api_base'],
-        api_key=model_config['api_key'],
+        api_base=api_base,
+        api_key=api_key,
         temperature=model_config.get('temperature', 0.1),
         max_tokens=model_config.get('max_tokens', 256),
     )

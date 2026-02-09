@@ -1,0 +1,31 @@
+run_id: "run_20260203_071928"
+base_dir: "/Users/alex/repos/Kaggle/SyntheticMass"
+
+model:
+  name: "google/medgemma-27b-text-it"
+  api_base: "https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/openai/v1"
+  api_key_env: "RUNPOD_API_KEY"
+  temperature: 0.1
+  max_tokens: 256
+
+dspy:
+  optimized_program: "data/dspy/optimized_program.json"
+  auto: "medium"
+  num_trials: 15
+  max_bootstrapped_demos: 3
+  minibatch_size: 25
+  prompt_model:
+    provider: "anthropic/claude-haiku-4-5-20251001"
+    api_key_env: "ANTHROPIC_API_KEY"
+
+langfuse:
+  enabled: false
+  base_url: "http://localhost:3000"
+  public_key: "pk-lf-local"
+  secret_key: "sk-lf-local"
+
+gray_zone:
+  lower_threshold: 4.0
+  upper_threshold: 6.0
+  confidence_threshold: 0.7
+  features_csv: "../entity-resolution/output/predicted_matches.csv"
