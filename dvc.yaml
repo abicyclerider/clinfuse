@@ -4,16 +4,19 @@ vars:
 stages:
   generate:
     cmd: >-
-      SYNTHEA_POPULATION=${generate.population}
-      SYNTHEA_SEED=${generate.seed}
-      docker compose -f synthea-runner/docker-compose.yml
-      --project-directory synthea-runner
-      up --exit-code-from synthea
+      rm -rf synthea-runner/output/synthea_raw &&
+      docker build -t synthea synthea-runner/synthea-docker/ &&
+      docker run --rm
+      -e JAVA_OPTS=-Xmx8g
+      -v $(pwd)/synthea-runner/output/synthea_raw:/synthea/synthea/output
+      synthea
+      /bin/sh -c "./run_synthea -p ${generate.population} -s ${generate.seed}
+      --exporter.baseDirectory=./output --exporter.csv.export=true
+      --exporter.fhir.export=false Massachusetts"
     params:
       - generate.population
       - generate.seed
     deps:
-      - synthea-runner/docker-compose.yml
       - synthea-runner/synthea-docker/Dockerfile
     outs:
       - synthea-runner/output/synthea_raw/csv:
