@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """
-Train MedGemma 4B as a binary classifier for entity resolution on GPU.
+Train text-only MedGemma 4B as a binary classifier for entity resolution on GPU.
 
-Uses QLoRA (4-bit NF4) to fit on A4000 16GB. Replaces the LM head with a
-2-class classification head (Gemma3ForSequenceClassification) and trains with
-LoRA on the attention projections.
-
-The vision tower is loaded but never used (no pixel_values passed), so it's
-inert — not worth the complexity of deleting.
+Uses QLoRA (4-bit NF4) on the text-only base model (vision tower already stripped
+by prepare_base_model.py). Trains a 2-class classification head
+(Gemma3TextForSequenceClassification) with LoRA on attention + MLP projections.
 
 Usage (RunPod A4000):
     python train_classifier_on_gpu.py
@@ -31,7 +28,7 @@ from transformers import (
     TrainingArguments,
 )
 
-MODEL_ID = "google/medgemma-4b-it"
+MODEL_ID = "abicyclerider/medgemma-4b-text-only-base"
 DATASET_REPO = "abicyclerider/entity-resolution-pairs"
 ADAPTER_REPO = "abicyclerider/medgemma-4b-entity-resolution-classifier"
 
@@ -119,11 +116,7 @@ def main():
 
     # Tokenize dataset
     def tokenize(examples):
-        tok = tokenizer(examples["text"], truncation=True, max_length=args.max_length)
-        # Gemma3 requires token_type_ids during training (text=0, image=1).
-        # We're text-only, so all zeros.
-        tok["token_type_ids"] = [[0] * len(ids) for ids in tok["input_ids"]]
-        return tok
+        return tokenizer(examples["text"], truncation=True, max_length=args.max_length)
 
     dataset = dataset.map(tokenize, batched=True, remove_columns=["text", "messages"])
 

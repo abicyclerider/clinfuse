@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-Merge LoRA adapter into MedGemma 4B and export as a text-only classifier.
+Merge LoRA adapter into the text-only MedGemma 4B base and export.
 
-Loads the full multimodal MedGemma 4B base model in bf16, applies the LoRA
-adapter, merges weights, then extracts just the text backbone + classification
-head into a standalone Gemma3TextForSequenceClassification model.
+Loads the text-only base model (already stripped of vision tower by
+prepare_base_model.py), applies the LoRA adapter, merges weights, and saves
+the resulting standalone Gemma3TextForSequenceClassification model.
 
 The resulting model:
-  - Has no vision tower (SigLIP) or multi-modal projector (~420M fewer params)
-  - Doesn't require token_type_ids at inference
   - Doesn't require the peft library to load
   - Loads via AutoModelForSequenceClassification.from_pretrained()
 
@@ -23,21 +21,16 @@ import sys
 
 import torch
 
-BASE_MODEL_ID = "google/medgemma-4b-it"
+BASE_MODEL_ID = "abicyclerider/medgemma-4b-text-only-base"
 ADAPTER_REPO = "abicyclerider/medgemma-4b-entity-resolution-classifier"
 OUTPUT_REPO = "abicyclerider/medgemma-4b-entity-resolution-text-only"
 DATASET_REPO = "abicyclerider/entity-resolution-pairs"
 
 
-def merge_and_extract(base_model_id, adapter_repo):
-    """Load base model + LoRA, merge, extract text-only model."""
+def merge_adapter(base_model_id, adapter_repo):
+    """Load text-only base model + LoRA adapter, merge, return merged model."""
     from peft import PeftModel
-    from transformers import (
-        AutoModelForSequenceClassification,
-        AutoTokenizer,
-        Gemma3TextConfig,
-        Gemma3TextForSequenceClassification,
-    )
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
     # Load tokenizer
     print(f"Loading tokenizer from {base_model_id}...")
@@ -45,67 +38,32 @@ def merge_and_extract(base_model_id, adapter_repo):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load base model in bf16 (no quantization — need full precision for clean merge)
+    # Load text-only base model in bf16 (no quantization — need full precision for clean merge)
     print(f"Loading {base_model_id} in bf16...")
     model = AutoModelForSequenceClassification.from_pretrained(
         base_model_id,
-        num_labels=2,
         torch_dtype=torch.bfloat16,
         device_map="auto",
     )
     model.config.pad_token_id = tokenizer.pad_token_id
+    print(f"Base model type: {type(model).__name__}")
+    print(f"Base model params: {sum(p.numel() for p in model.parameters()):,}")
 
     # Apply LoRA adapter
-    print(f"Applying LoRA adapter from {adapter_repo}...")
+    print(f"\nApplying LoRA adapter from {adapter_repo}...")
     model = PeftModel.from_pretrained(model, adapter_repo)
 
     # Merge LoRA into base weights
     print("Merging LoRA weights into base model...")
     model = model.merge_and_unload()
+    model.eval()
     print(f"Merged model type: {type(model).__name__}")
     print(f"Merged model params: {sum(p.numel() for p in model.parameters()):,}")
 
-    # Extract text backbone weights
-    # Multimodal: model.model.language_model.* -> Text-only: model.*
-    print("\nExtracting text backbone state_dict...")
-    lang_state = model.model.language_model.state_dict()
-    score_state = model.score.state_dict()
-    print(f"  Language model keys: {len(lang_state)}")
-    print(f"  Score head keys: {len(score_state)}")
-
-    # Build text-only config
-    text_config_dict = model.config.text_config.to_dict()
-    text_config = Gemma3TextConfig(**text_config_dict)
-    text_config.num_labels = 2
-    text_config.pad_token_id = tokenizer.pad_token_id
-
-    # Instantiate text-only classifier
-    print("\nCreating Gemma3TextForSequenceClassification...")
-    text_model = Gemma3TextForSequenceClassification(text_config)
-    text_model = text_model.to(dtype=torch.bfloat16)
-
-    # Load weights
-    text_model.model.load_state_dict(lang_state)
-    text_model.score.load_state_dict(score_state)
-    text_model.eval()
-
-    text_params = sum(p.numel() for p in text_model.parameters())
-    multimodal_params = sum(p.numel() for p in model.parameters())
-
-    # Free the multimodal model before moving text model to GPU
-    del model, lang_state, score_state
-    torch.cuda.empty_cache()
-
-    # Move text-only model to GPU
-    text_model = text_model.to("cuda")
-
-    print(f"Text-only model params: {text_params:,}")
-    print(f"  (saved ~{multimodal_params - text_params:,} params by removing vision tower)")
-
-    return text_model, tokenizer
+    return model, tokenizer
 
 
-def validate_on_test(text_model, tokenizer, batch_size=16, max_length=2048):
+def validate_on_test(model, tokenizer, batch_size=16, max_length=2048):
     """Run test set evaluation and print metrics."""
     import numpy as np
     import time
@@ -133,10 +91,10 @@ def validate_on_test(text_model, tokenizer, batch_size=16, max_length=2048):
             padding=True,
             return_tensors="pt",
         )
-        inputs = {k: v.to(text_model.device) for k, v in inputs.items()}
+        inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
         with torch.no_grad():
-            logits = text_model(**inputs).logits
+            logits = model(**inputs).logits
 
         preds = logits.argmax(dim=-1).cpu().numpy()
         all_preds.extend(preds)
@@ -156,7 +114,7 @@ def validate_on_test(text_model, tokenizer, batch_size=16, max_length=2048):
     f1 = f1_score(labels, all_preds, zero_division=0)
 
     print(f"\n{'='*60}")
-    print(f"Text-Only Model — Test Set Results ({len(texts)} examples, {elapsed:.1f}s)")
+    print(f"Merged Model — Test Set Results ({len(texts)} examples, {elapsed:.1f}s)")
     print(f"{'='*60}")
     print(f"  Accuracy:  {acc:.4f}")
     print(f"  Precision: {prec:.4f}")
@@ -173,7 +131,7 @@ def validate_on_test(text_model, tokenizer, batch_size=16, max_length=2048):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Merge LoRA adapter into MedGemma 4B and export text-only classifier"
+        description="Merge LoRA adapter into text-only MedGemma 4B base"
     )
     parser.add_argument("--validate", action="store_true",
                         help="Run test set evaluation after export")
@@ -195,16 +153,16 @@ def main():
     gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
     print(f"GPU: {gpu_name} ({gpu_mem:.1f} GB)")
 
-    # Merge and extract
-    text_model, tokenizer = merge_and_extract(BASE_MODEL_ID, ADAPTER_REPO)
+    # Merge adapter
+    model, tokenizer = merge_adapter(BASE_MODEL_ID, ADAPTER_REPO)
 
     # Validate
     if args.validate:
-        validate_on_test(text_model, tokenizer, batch_size=args.batch_size)
+        validate_on_test(model, tokenizer, batch_size=args.batch_size)
 
     # Save locally
-    print(f"\nSaving text-only model to {args.local_dir}...")
-    text_model.save_pretrained(args.local_dir)
+    print(f"\nSaving merged model to {args.local_dir}...")
+    model.save_pretrained(args.local_dir)
     tokenizer.save_pretrained(args.local_dir)
     print("Saved.")
 
@@ -224,7 +182,7 @@ def main():
     # Push to Hub
     if not args.no_push:
         print(f"\nPushing to {args.output_repo} (private)...")
-        text_model.push_to_hub(args.output_repo, private=True)
+        model.push_to_hub(args.output_repo, private=True)
         tokenizer.push_to_hub(args.output_repo, private=True)
         print("Done! Model available on HF Hub.")
     else:
