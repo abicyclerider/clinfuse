@@ -44,3 +44,21 @@ stages:
     outs:
       - output/augmented:
           cache: false
+
+  infer:
+    cmd: >-
+      rm -rf output/inferred &&
+      mkdir -p output/inferred &&
+      fine-tuning/infer_remote.sh
+      output/resolved/gray_zone_pairs.csv
+      output/inferred/predictions.csv
+    deps:
+      - fine-tuning/Dockerfile
+      - fine-tuning/infer_remote.sh
+      - fine-tuning/inference_classifier.py
+      - fine-tuning/requirements.txt
+      - fine-tuning/run_on_runpod.sh
+      - output/resolved/gray_zone_pairs.csv
+    outs:
+      - output/inferred/predictions.csv:
+          cache: false
