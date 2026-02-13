@@ -1,8 +1,8 @@
-# Multi-target Dockerfile for the MedGemma entity resolution pipeline.
-# Build a specific stage: docker build --target <stage> -t medgemma-<stage> .
-# Stages: prepare, train, export, infer, interactive
+# MedGemma entity resolution pipeline.
+# Build: docker build -t medgemma .
+# Run:   docker run --gpus all -e HF_TOKEN=hf_... medgemma python <script>.py [args]
 
-FROM nvidia/cuda:12.4.1-base-ubuntu22.04 AS base
+FROM nvidia/cuda:12.4.1-base-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -21,49 +21,7 @@ RUN pip install --no-cache-dir \
     torch==2.6.0 torchvision==0.21.0 \
     --index-url https://download.pytorch.org/whl/cu124
 
-# ---------- Stage: prepare (strip vision tower, one-time CPU job) ----------
-FROM base AS prepare
-
-COPY requirements-prepare.txt .
-RUN pip install --no-cache-dir -r requirements-prepare.txt
-
-COPY prepare_base_model.py .
-
-ENTRYPOINT ["python", "prepare_base_model.py"]
-
-# ---------- Stage: train (QLoRA fine-tuning, GPU) ----------
-FROM base AS train
-
-COPY requirements-train.txt .
-RUN pip install --no-cache-dir -r requirements-train.txt
-
-COPY train_classifier_on_gpu.py .
-
-ENTRYPOINT ["python", "train_classifier_on_gpu.py"]
-
-# ---------- Stage: export (merge LoRA adapter, GPU) ----------
-FROM base AS export
-
-COPY requirements-export.txt .
-RUN pip install --no-cache-dir -r requirements-export.txt
-
-COPY export_text_only_model.py .
-
-ENTRYPOINT ["python", "export_text_only_model.py"]
-
-# ---------- Stage: infer (batch inference, GPU) ----------
-FROM base AS infer
-
-COPY requirements-infer.txt .
-RUN pip install --no-cache-dir -r requirements-infer.txt
-
-COPY inference_classifier.py .
-
-ENTRYPOINT ["python", "inference_classifier.py"]
-
-# ---------- Stage: interactive (RunPod SSH, all scripts) ----------
-FROM base AS interactive
-
+# Install all Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -73,5 +31,4 @@ COPY prepare_base_model.py \
      inference_classifier.py \
      ./
 
-# No ENTRYPOINT — RunPod manages the container lifecycle and SSH.
 CMD ["sleep", "infinity"]

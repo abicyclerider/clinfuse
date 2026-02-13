@@ -45,27 +45,20 @@ Inference requires a CUDA GPU. Uses 4-bit NF4 quantization by default (`--no-qua
 
 ## Docker
 
-A single multi-target Dockerfile covers all pipeline stages. Build a specific stage with `--target`:
-
 ```bash
+docker build -t medgemma .
+
 # Prepare base model (CPU — one-time)
-docker build --target prepare -t medgemma-prepare .
-docker run -e HF_TOKEN=hf_... medgemma-prepare
+docker run -e HF_TOKEN=hf_... medgemma python prepare_base_model.py
 
 # Train (GPU)
-docker build --target train -t medgemma-train .
-docker run --gpus all -e HF_TOKEN=hf_... medgemma-train --epochs 3
+docker run --gpus all -e HF_TOKEN=hf_... medgemma python train_classifier_on_gpu.py --epochs 3
 
 # Export (GPU)
-docker build --target export -t medgemma-export .
-docker run --gpus all -e HF_TOKEN=hf_... medgemma-export --validate
+docker run --gpus all -e HF_TOKEN=hf_... medgemma python export_text_only_model.py --validate
 
 # Infer (GPU)
-docker build --target infer -t medgemma-infer .
-docker run --gpus all -e HF_TOKEN=hf_... medgemma-infer --dataset
-
-# Interactive (RunPod SSH — all scripts, sleep infinity)
-docker build --target interactive -t medgemma-interactive .
+docker run --gpus all -e HF_TOKEN=hf_... medgemma python inference_classifier.py --dataset
 ```
 
 ## Local Setup (without Docker)
@@ -74,9 +67,8 @@ docker build --target interactive -t medgemma-interactive .
 cd fine-tuning
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-train.txt    # training
-pip install -r requirements-infer.txt    # inference only
-pip install -r requirements-prepare.txt  # base model extraction only
+pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt
 ```
 
 ## GPU Training on RunPod
