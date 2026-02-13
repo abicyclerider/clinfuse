@@ -1,10 +1,8 @@
+torch>=2.4.0
 transformers>=4.49.0
 peft>=0.14.0
 bitsandbytes>=0.44.0
 datasets>=3.0.0
 accelerate>=1.0.0
-scikit-learn>=1.5.0
+scikit-learn>=1.4.0
 huggingface-hub>=0.27.0
-pandas>=2.0.0
-numpy
-fsspec<=2025.10.0

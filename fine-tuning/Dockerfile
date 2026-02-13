@@ -1,21 +1,33 @@
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
 
-# Avoid interactive prompts during apt install
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
-# Python 3.10 + pip
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3.10 python3-pip && \
+    apt-get install -y --no-install-recommends \
+        python3.11 python3.11-venv python3-pip && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python && \
     rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch (CUDA 11.8) + inference dependencies
-COPY requirements-inference.txt .
-RUN pip install --no-cache-dir torch>=2.4.0 --index-url https://download.pytorch.org/whl/cu118 && \
-    pip install --no-cache-dir -r requirements-inference.txt
-
 WORKDIR /app
-COPY inference_classifier.py .
 
-# HF token passed at runtime via env var
-# docker run --gpus all -e HF_TOKEN=hf_... medgemma-inference --dataset
-ENTRYPOINT ["python3", "inference_classifier.py"]
+# Install PyTorch with CUDA 12.4 support separately (needs custom index URL)
+RUN pip install --no-cache-dir \
+    torch==2.6.0 torchvision==0.21.0 \
+    --index-url https://download.pytorch.org/whl/cu124
+
+# Install remaining dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy all pipeline scripts
+COPY prepare_base_model.py \
+     train_classifier_on_gpu.py \
+     export_text_only_model.py \
+     inference_classifier.py \
+     ./
+
+# No ENTRYPOINT — RunPod manages the container lifecycle and SSH.
+# To run a stage: python <script>.py [args]
+CMD ["sleep", "infinity"]

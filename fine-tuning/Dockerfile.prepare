@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements-prepare.txt .
+RUN pip install --no-cache-dir -r requirements-prepare.txt
+
+COPY prepare_base_model.py .
+
+# HF token passed at runtime via env var
+# docker run -e HF_TOKEN=hf_... medgemma-prepare
+ENTRYPOINT ["python", "prepare_base_model.py"]

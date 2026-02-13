@@ -1,0 +1,18 @@
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3.11 python3-pip && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements-train.txt .
+RUN pip install --no-cache-dir -r requirements-train.txt
+
+COPY train_classifier_on_gpu.py .
+
+# HF token passed at runtime via env var
+# docker run --gpus all -e HF_TOKEN=hf_... medgemma-train --epochs 3
+ENTRYPOINT ["python3", "train_classifier_on_gpu.py"]
