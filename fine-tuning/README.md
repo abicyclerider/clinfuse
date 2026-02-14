@@ -17,7 +17,7 @@ Fine-tuned MedGemma 4B (text-only) for pairwise patient entity resolution on Syn
 | 2. Prepare base model | `prepare_base_model.py` | Strip vision tower from `google/medgemma-4b-it`, push text-only base to HF Hub (one-time, CPU) |
 | 3. Train | `train_classifier_on_gpu.py` | QLoRA fine-tuning on text-only base (H100 ~2.2h, L40S needs gradient checkpointing) |
 | 4. Export | `export_text_only_model.py` | Merge LoRA adapter into base, upload merged model |
-| 5. Infer | `inference_classifier.py` | Batch inference & evaluation on test set or custom CSV |
+| 5. Infer | `inference_classifier.py` | Batch inference & evaluation on test set, custom CSV, or HF Hub dataset |
 
 ## Quick Start
 
@@ -39,6 +39,11 @@ python inference_classifier.py --dataset
 
 # 5b. Classify a custom CSV (must have a 'text' column)
 python inference_classifier.py --input-csv pairs.csv --output-csv predictions.csv
+
+# 5c. HF Hub round-trip (for remote GPU — RunPod, Vertex AI)
+python inference_classifier.py \
+    --hf-input abicyclerider/grey-zone-pairs \
+    --hf-output abicyclerider/grey-zone-predictions
 ```
 
 Inference requires a CUDA GPU. Uses 4-bit NF4 quantization by default (`--no-quantize` for bf16).
@@ -71,6 +76,47 @@ pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements.txt
 ```
 
-## GPU Training on RunPod
+## Remote GPU on RunPod
 
-See [`RUNPOD_GUIDE.md`](RUNPOD_GUIDE.md) for provisioning, SSH access, and training commands.
+The `run_on_runpod.sh` script launches any pipeline stage on a RunPod GPU pod. It uses HF Hub as the data bridge — no SSH or file copying needed.
+
+```bash
+# 1. Upload grey zone pairs to HF Hub
+python -c "
+from datasets import Dataset
+import pandas as pd
+df = pd.read_csv('output/resolved/gray_zone_pairs.csv')
+Dataset.from_pandas(df).push_to_hub('abicyclerider/grey-zone-pairs')
+"
+
+# 2. Launch inference on RunPod (fire and forget)
+cd fine-tuning
+./run_on_runpod.sh infer \
+    --hf-input abicyclerider/grey-zone-pairs \
+    --hf-output abicyclerider/grey-zone-predictions
+
+# 3. Pod auto-stops when done. Download predictions:
+python -c "
+from datasets import load_dataset
+ds = load_dataset('abicyclerider/grey-zone-predictions', split='train')
+ds.to_pandas().to_csv('output/inferred/predictions.csv', index=False)
+"
+
+# 4. Continue DVC pipeline
+dvc repro golden_records
+```
+
+Override GPU type (default: NVIDIA L40S):
+
+```bash
+./run_on_runpod.sh infer --gpu-type "NVIDIA A100 80GB PCIe" \
+    --hf-input abicyclerider/grey-zone-pairs \
+    --hf-output abicyclerider/grey-zone-predictions
+```
+
+Prerequisites:
+- `runpodctl` configured (`~/.runpod/config.toml` with API key)
+- `HF_TOKEN` in `fine-tuning/.env`
+- GHCR package set to public (`gh api -X PUT /user/packages/container/medgemma-pipeline/visibility -f visibility=public`)
+
+See [`RUNPOD_GUIDE.md`](RUNPOD_GUIDE.md) for SSH-based provisioning and manual training commands.

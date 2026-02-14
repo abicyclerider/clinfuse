@@ -1,5 +1,5 @@
 vars:
-  - params.yaml
+- params.yaml
 
 stages:
   generate:
@@ -14,13 +14,13 @@ stages:
       --exporter.baseDirectory=./output --exporter.csv.export=true
       --exporter.fhir.export=false Massachusetts"
     params:
-      - generate.population
-      - generate.seed
+    - generate.population
+    - generate.seed
     deps:
-      - synthea-runner/synthea-docker/Dockerfile
+    - synthea-runner/synthea-docker/Dockerfile
     outs:
-      - synthea-runner/output/synthea_raw/csv:
-          cache: false
+    - synthea-runner/output/synthea_raw/csv:
+        cache: false
 
   augment:
     cmd: >-
@@ -34,16 +34,43 @@ stages:
       --output /data/output
       --random-seed ${augment.random_seed}
     params:
-      - augment.random_seed
+    - augment.random_seed
     deps:
-      - synthea-runner/output/synthea_raw/csv
-      - augmentation/Dockerfile
-      - augmentation/requirements-runtime.txt
-      - augmentation/cli/augment.py
-      - augmentation/config/default_config.yaml
+    - synthea-runner/output/synthea_raw/csv
+    - augmentation/Dockerfile
+    - augmentation/requirements-runtime.txt
+    - augmentation/cli/augment.py
+    - augmentation/config/default_config.yaml
     outs:
-      - output/augmented:
-          cache: false
+    - output/augmented:
+        cache: false
+
+  resolve:
+    cmd: >-
+      rm -rf output/resolved &&
+      docker build -f entity-resolution/Dockerfile -t entity-resolution . &&
+      docker run --rm
+      -v $(pwd)/output/augmented:/data/augmented:ro
+      -v $(pwd)/output/resolved:/data/resolved
+      entity-resolution
+      python entity-resolution/resolve.py
+      --augmented-dir /data/augmented
+      --output-dir /data/resolved
+      --config entity-resolution/config/matching_config.yaml
+    params:
+    - resolve.auto_reject_threshold
+    - resolve.auto_match_threshold
+    deps:
+    - output/augmented
+    - entity-resolution/Dockerfile
+    - entity-resolution/resolve.py
+    - entity-resolution/src/
+    - entity-resolution/config/matching_config.yaml
+    - entity-resolution/requirements-runtime.txt
+    - shared/
+    outs:
+    - output/resolved:
+        cache: false
 
   infer:
     cmd: >-
@@ -53,12 +80,68 @@ stages:
       output/resolved/gray_zone_pairs.csv
       output/inferred/predictions.csv
     deps:
-      - fine-tuning/Dockerfile
-      - fine-tuning/infer_remote.sh
-      - fine-tuning/inference_classifier.py
-      - fine-tuning/requirements.txt
-      - fine-tuning/run_on_runpod.sh
-      - output/resolved/gray_zone_pairs.csv
+    - fine-tuning/Dockerfile
+    - fine-tuning/infer_remote.sh
+    - fine-tuning/inference_classifier.py
+    - fine-tuning/requirements.txt
+    - fine-tuning/run_on_runpod.sh
+    - output/resolved/gray_zone_pairs.csv
     outs:
-      - output/inferred/predictions.csv:
-          cache: false
+    - output/inferred/predictions.csv:
+        cache: false
+
+  train_scorer:
+    cmd: >-
+      rm -rf output/scorer &&
+      docker run --rm
+      -v $(pwd)/output/augmented:/data/augmented:ro
+      -v $(pwd)/output/resolved:/data/resolved:ro
+      -v $(pwd)/output/inferred:/data/inferred:ro
+      -v $(pwd)/output/scorer:/data/scorer
+      entity-resolution
+      python entity-resolution/train_scorer.py
+      --augmented-dir /data/augmented
+      --features /data/resolved/features.csv
+      --predictions /data/inferred/predictions.csv
+      --output-dir /data/scorer
+    deps:
+    - output/augmented
+    - output/resolved/features.csv
+    - output/inferred/predictions.csv
+    - entity-resolution/Dockerfile
+    - entity-resolution/train_scorer.py
+    - entity-resolution/src/
+    - shared/
+    outs:
+    - output/scorer:
+        cache: false
+  golden_records:
+    cmd: >-
+      rm -rf output/golden_records &&
+      docker run --rm
+      -v $(pwd)/output/augmented:/data/augmented:ro
+      -v $(pwd)/output/resolved:/data/resolved:ro
+      -v $(pwd)/output/inferred:/data/inferred:ro
+      -v $(pwd)/output/scorer:/data/scorer:ro
+      -v $(pwd)/output/golden_records:/data/golden_records
+      entity-resolution
+      python entity-resolution/build_golden_records.py
+      --augmented-dir /data/augmented
+      --auto-matches /data/resolved/auto_matches.csv
+      --predictions /data/inferred/predictions.csv
+      --features /data/resolved/features.csv
+      --scorer-model /data/scorer/scorer_model.joblib
+      --output-dir /data/golden_records
+      --config entity-resolution/config/matching_config.yaml
+    deps:
+    - output/resolved/auto_matches.csv
+    - output/resolved/features.csv
+    - output/inferred/predictions.csv
+    - output/scorer/scorer_model.joblib
+    - output/augmented
+    - entity-resolution/build_golden_records.py
+    - entity-resolution/src/
+    - shared/
+    outs:
+    - output/golden_records:
+        cache: false

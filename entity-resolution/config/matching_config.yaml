@@ -1,6 +1,5 @@
 # Entity Resolution Configuration
-run_id: "run_20260203_071928"  # Using run with stripped names (no Synthea numbers)
-base_dir: "/Users/alex/repos/Kaggle/SyntheticMass"
+# run_id and base_dir are now passed via CLI args (--augmented-dir, --output-dir)
 
 # Blocking strategy
 blocking:
@@ -17,6 +16,12 @@ classification:
   auto_reject_threshold: 4.0   # Score < 4.0 → definite non-match
   auto_match_threshold: 6.0    # Score >= 6.0 → definite match
   single_threshold: 5.60       # Gray zone fallback threshold (F1=0.983)
+
+# Gray zone: logit-space combination of demographic score + LLM confidence
+gray_zone:
+  w_demo: 0.5        # weight on demographic logit (total_score - 5.0)
+  w_llm: 1.0         # weight on LLM logit
+  threshold: 0.0     # combined logit threshold (0.0 = 50/50 odds)
 
 # Golden record creation
 golden_record:

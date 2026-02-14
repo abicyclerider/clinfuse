@@ -1,0 +1,195 @@
+schema: '2.0'
+stages:
+  generate:
+    cmd: rm -rf synthea-runner/output/synthea_raw && docker build -t synthea 
+      synthea-runner/synthea-docker/ && docker run --rm -e JAVA_OPTS=-Xmx8g -v 
+      $(pwd)/synthea-runner/output/synthea_raw:/synthea/synthea/output synthea 
+      /bin/sh -c "./run_synthea -p 500 -s 67890 
+      --exporter.baseDirectory=./output --exporter.csv.export=true 
+      --exporter.fhir.export=false Massachusetts"
+    deps:
+    - path: synthea-runner/synthea-docker/Dockerfile
+      hash: md5
+      md5: 1369d1d9cd02662b7bf3fe723a265ca1
+      size: 1433
+    params:
+      params.yaml:
+        generate.population: 500
+        generate.seed: 67890
+    outs:
+    - path: synthea-runner/output/synthea_raw/csv
+      hash: md5
+      md5: 062b740a84dab00c72bbd571505a15e5.dir
+      size: 533089104
+      nfiles: 18
+  augment:
+    cmd: rm -rf output/augmented && docker build -t augmentation augmentation/ 
+      && docker run --rm -v 
+      $(pwd)/synthea-runner/output/synthea_raw/csv:/data/input:ro -v 
+      $(pwd)/output/augmented:/data/output augmentation --input /data/input 
+      --output /data/output --random-seed 99
+    deps:
+    - path: augmentation/Dockerfile
+      hash: md5
+      md5: 15dd455982ee6b64f848ddb66fb2cee2
+      size: 256
+    - path: augmentation/cli/augment.py
+      hash: md5
+      md5: 844282ecfcf641973dff54dd621355cc
+      size: 13768
+    - path: augmentation/config/default_config.yaml
+      hash: md5
+      md5: 6bc905898e0280c554b96ec931cc6c96
+      size: 1447
+    - path: augmentation/requirements-runtime.txt
+      hash: md5
+      md5: a84415c3be592d7ac92177a1b5e62dea
+      size: 207
+    - path: synthea-runner/output/synthea_raw/csv
+      hash: md5
+      md5: 062b740a84dab00c72bbd571505a15e5.dir
+      size: 533089104
+      nfiles: 18
+    params:
+      params.yaml:
+        augment.random_seed: 99
+    outs:
+    - path: output/augmented
+      hash: md5
+      md5: 4549fb5837ad07fe383e8bcb4948abd6.dir
+      size: 533496994
+      nfiles: 95
+  resolve:
+    cmd: rm -rf output/resolved && docker build -f entity-resolution/Dockerfile 
+      -t entity-resolution . && docker run --rm -v 
+      $(pwd)/output/augmented:/data/augmented:ro -v 
+      $(pwd)/output/resolved:/data/resolved entity-resolution python 
+      entity-resolution/resolve.py --augmented-dir /data/augmented --output-dir 
+      /data/resolved --config entity-resolution/config/matching_config.yaml
+    deps:
+    - path: entity-resolution/Dockerfile
+      hash: md5
+      md5: aa2df09e7babc2dd685536ad3ac410c4
+      size: 270
+    - path: entity-resolution/config/matching_config.yaml
+      hash: md5
+      md5: 49e810a9e51da9208661f69abf1955fc
+      size: 1204
+    - path: entity-resolution/requirements-runtime.txt
+      hash: md5
+      md5: a1424d9ca413edd0c96861e01424e752
+      size: 150
+    - path: entity-resolution/resolve.py
+      hash: md5
+      md5: 1b0321e4531de85460f46cb23ab51529
+      size: 8092
+    - path: entity-resolution/src/
+      hash: md5
+      md5: ac01e60838228d102b6b62db67e9be60.dir
+      size: 89748
+      nfiles: 13
+    - path: output/augmented
+      hash: md5
+      md5: 4549fb5837ad07fe383e8bcb4948abd6.dir
+      size: 533496994
+      nfiles: 95
+    - path: shared/
+      hash: md5
+      md5: dee2997ebbb4933304e9afa4bf0b7ce7.dir
+      size: 30371
+      nfiles: 10
+    params:
+      params.yaml:
+        resolve.auto_match_threshold: 6.0
+        resolve.auto_reject_threshold: 4.0
+    outs:
+    - path: output/resolved
+      hash: md5
+      md5: ec2e3c1e9a2d8a8db8ecbc074eb47e1d.dir
+      size: 11485914
+      nfiles: 4
+  golden_records:
+    cmd: rm -rf output/golden_records && docker run --rm -v 
+      $(pwd)/output/augmented:/data/augmented:ro -v 
+      $(pwd)/output/resolved:/data/resolved:ro -v 
+      $(pwd)/output/inferred:/data/inferred:ro -v 
+      $(pwd)/output/golden_records:/data/golden_records entity-resolution python
+      entity-resolution/build_golden_records.py --augmented-dir /data/augmented 
+      --auto-matches /data/resolved/auto_matches.csv --predictions 
+      /data/inferred/predictions.csv --features /data/resolved/features.csv 
+      --output-dir /data/golden_records --config 
+      entity-resolution/config/matching_config.yaml
+    deps:
+    - path: entity-resolution/build_golden_records.py
+      hash: md5
+      md5: 10cffa432f71e1c5e7d16c9b0e9674ba
+      size: 10341
+    - path: entity-resolution/src/
+      hash: md5
+      md5: ac01e60838228d102b6b62db67e9be60.dir
+      size: 89748
+      nfiles: 13
+    - path: output/augmented
+      hash: md5
+      md5: 4549fb5837ad07fe383e8bcb4948abd6.dir
+      size: 533496994
+      nfiles: 95
+    - path: output/inferred/predictions.csv
+      hash: md5
+      md5: e54ab911add8ef1edf55ec7f5cf12402
+      size: 6566366
+    - path: output/resolved/auto_matches.csv
+      hash: md5
+      md5: 693867f6660b2581fb42705a65d9337e
+      size: 124803
+    - path: output/resolved/features.csv
+      hash: md5
+      md5: f00eb320148f532263fc455c795a8a63
+      size: 4802770
+    - path: shared/
+      hash: md5
+      md5: dee2997ebbb4933304e9afa4bf0b7ce7.dir
+      size: 30371
+      nfiles: 10
+    outs:
+    - path: output/golden_records
+      hash: md5
+      md5: 31ff3270026a615fffa06048792bf247.dir
+      size: 299516
+      nfiles: 3
+  infer:
+    cmd: rm -rf output/inferred && mkdir -p output/inferred && 
+      fine-tuning/infer_remote.sh output/resolved/gray_zone_pairs.csv 
+      output/inferred/predictions.csv
+    deps:
+    - path: fine-tuning/Dockerfile
+      hash: md5
+      md5: 7118cbc8dc48ea53c508065076d0d425
+      size: 1309
+    - path: fine-tuning/infer_remote.sh
+      hash: md5
+      md5: bb0d6fbc4b27fa433a3a1046c0922029
+      size: 12067
+      isexec: true
+    - path: fine-tuning/inference_classifier.py
+      hash: md5
+      md5: af2225274b9944ae1a10a34e1f55dcb5
+      size: 15259
+    - path: fine-tuning/requirements.txt
+      hash: md5
+      md5: c18a171753741de19258bb92ea08add9
+      size: 171
+    - path: fine-tuning/run_on_runpod.sh
+      hash: md5
+      md5: 3fe175104c92234059f27749153f38dd
+      size: 3856
+      isexec: true
+    - path: output/resolved/gray_zone_pairs.csv
+      hash: md5
+      md5: 62d928c1f64b215088e94cb057adb53a
+      size: 6558076
+    outs:
+    - path: output/inferred/predictions.csv
+      hash: md5
+      md5: e54ab911add8ef1edf55ec7f5cf12402
+      size: 6566366

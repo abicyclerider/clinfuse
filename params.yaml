@@ -1,6 +1,10 @@
 generate:
   population: 500
-  seed: 12345
+  seed: 67890
 
 augment:
-  random_seed: 42
+  random_seed: 99
+
+resolve:
+  auto_reject_threshold: 4.0
+  auto_match_threshold: 6.0

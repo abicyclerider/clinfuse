@@ -16,6 +16,8 @@ RUN apt-get update && \
 
 WORKDIR /app
 
+RUN pip install --no-cache-dir --upgrade pip
+
 # Install PyTorch with CUDA 12.4 support (needs custom index URL, so separate from requirements)
 RUN pip install --no-cache-dir \
     torch==2.6.0 torchvision==0.21.0 \
@@ -24,6 +26,11 @@ RUN pip install --no-cache-dir \
 # Install all Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# gcc + headers needed by triton (bitsandbytes JIT-compiles CUDA kernels at import time)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libc6-dev python3.11-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY prepare_base_model.py \
      train_classifier_on_gpu.py \

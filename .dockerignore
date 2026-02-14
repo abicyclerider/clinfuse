@@ -1,0 +1,8 @@
+output/
+synthea-runner/output/
+.git/
+.venv/
+__pycache__/
+*.pyc
+.dvc/
+analysis/
