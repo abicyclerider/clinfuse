@@ -17,7 +17,9 @@ Usage (on a GPU with >=16GB VRAM):
 """
 
 import argparse
+import json
 import sys
+from datetime import datetime, timezone
 
 import torch
 
@@ -65,17 +67,22 @@ def merge_adapter(base_model_id, adapter_repo):
 
 def validate_on_test(model, tokenizer, batch_size=16, max_length=2048):
     """Run test set evaluation and print metrics."""
-    import numpy as np
     import time
+
+    import numpy as np
     from datasets import load_dataset
     from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
     print(f"\nLoading test split from {DATASET_REPO}...")
     dataset = load_dataset(DATASET_REPO, split="test")
     texts = [ex["messages"][0]["content"] for ex in dataset]
-    labels = np.array([1 if ex["messages"][1]["content"] == "True" else 0 for ex in dataset])
+    labels = np.array(
+        [1 if ex["messages"][1]["content"] == "True" else 0 for ex in dataset]
+    )
     print(f"  Test examples: {len(texts)}")
-    print(f"  Label distribution: {labels.sum()} positive, {len(labels) - labels.sum()} negative")
+    print(
+        f"  Label distribution: {labels.sum()} positive, {len(labels) - labels.sum()} negative"
+    )
 
     all_preds = []
     n_batches = (len(texts) + batch_size - 1) // batch_size
@@ -113,36 +120,55 @@ def validate_on_test(model, tokenizer, batch_size=16, max_length=2048):
     rec = recall_score(labels, all_preds, zero_division=0)
     f1 = f1_score(labels, all_preds, zero_division=0)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Merged Model — Test Set Results ({len(texts)} examples, {elapsed:.1f}s)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Accuracy:  {acc:.4f}")
     print(f"  Precision: {prec:.4f}")
     print(f"  Recall:    {rec:.4f}")
     print(f"  F1:        {f1:.4f}")
 
     if abs(f1 - 0.963) > 0.005:
-        print(f"\n  WARNING: F1 {f1:.4f} differs from expected 0.963 by more than 0.005!")
+        print(
+            f"\n  WARNING: F1 {f1:.4f} differs from expected 0.963 by more than 0.005!"
+        )
     else:
-        print(f"\n  OK: F1 matches expected 0.963 (within tolerance)")
+        print("\n  OK: F1 matches expected 0.963 (within tolerance)")
 
-    return f1
+    return {
+        "test_f1": f1,
+        "test_accuracy": acc,
+        "test_precision": prec,
+        "test_recall": rec,
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Merge LoRA adapter into text-only MedGemma 4B base"
     )
-    parser.add_argument("--validate", action="store_true",
-                        help="Run test set evaluation after export")
-    parser.add_argument("--no-push", action="store_true",
-                        help="Skip pushing to HF Hub")
-    parser.add_argument("--local-dir", type=str, default="./merged-text-only",
-                        help="Local directory to save the merged model")
-    parser.add_argument("--output-repo", type=str, default=OUTPUT_REPO,
-                        help=f"HF Hub repo to push to (default: {OUTPUT_REPO})")
-    parser.add_argument("--batch-size", type=int, default=16,
-                        help="Batch size for validation (default: 16)")
+    parser.add_argument(
+        "--validate", action="store_true", help="Run test set evaluation after export"
+    )
+    parser.add_argument("--no-push", action="store_true", help="Skip pushing to HF Hub")
+    parser.add_argument(
+        "--local-dir",
+        type=str,
+        default="./merged-text-only",
+        help="Local directory to save the merged model",
+    )
+    parser.add_argument(
+        "--output-repo",
+        type=str,
+        default=OUTPUT_REPO,
+        help=f"HF Hub repo to push to (default: {OUTPUT_REPO})",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Batch size for validation (default: 16)",
+    )
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -157,8 +183,9 @@ def main():
     model, tokenizer = merge_adapter(BASE_MODEL_ID, ADAPTER_REPO)
 
     # Validate
+    test_metrics = {}
     if args.validate:
-        validate_on_test(model, tokenizer, batch_size=args.batch_size)
+        test_metrics = validate_on_test(model, tokenizer, batch_size=args.batch_size)
 
     # Save locally
     print(f"\nSaving merged model to {args.local_dir}...")
@@ -166,9 +193,25 @@ def main():
     tokenizer.save_pretrained(args.local_dir)
     print("Saved.")
 
+    # Save export_info.json (gets pushed to HF Hub with the model)
+    total_params = sum(p.numel() for p in model.parameters())
+    export_info = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "hf_repo": args.output_repo,
+        "base_model": BASE_MODEL_ID,
+        "adapter_repo": ADAPTER_REPO,
+        "params": total_params,
+        **test_metrics,
+    }
+    export_info_path = f"{args.local_dir}/export_info.json"
+    with open(export_info_path, "w") as f:
+        json.dump(export_info, f, indent=2)
+    print(f"Export info saved to: {export_info_path}")
+
     # Verify it loads cleanly via Auto class
     print("\nVerifying Auto class loading...")
     from transformers import AutoModelForSequenceClassification
+
     reloaded = AutoModelForSequenceClassification.from_pretrained(
         args.local_dir,
         torch_dtype=torch.bfloat16,
@@ -181,10 +224,17 @@ def main():
 
     # Push to Hub
     if not args.no_push:
+        from huggingface_hub import upload_file
+
         print(f"\nPushing to {args.output_repo} (private)...")
         model.push_to_hub(args.output_repo, private=True)
         tokenizer.push_to_hub(args.output_repo, private=True)
-        print("Done! Model available on HF Hub.")
+        upload_file(
+            path_or_fileobj=export_info_path,
+            path_in_repo="export_info.json",
+            repo_id=args.output_repo,
+        )
+        print("Done! Model + export info available on HF Hub.")
     else:
         print("\n--no-push specified, skipping upload.")
 

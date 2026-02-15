@@ -1,7 +1,8 @@
 """Identifier error transformations (SSN, driver's license, passport)."""
 
-from typing import Any, Dict, List
 import re
+from typing import Any, Dict, List
+
 from .base_error import BaseError
 
 
@@ -21,7 +22,7 @@ class SSNTransposition(BaseError):
         ssn = str(value)
 
         # Extract digits only
-        digits = re.sub(r'\D', '', ssn)
+        digits = re.sub(r"\D", "", ssn)
 
         if len(digits) < 2:
             return value
@@ -32,10 +33,10 @@ class SSNTransposition(BaseError):
         # Transpose adjacent digits
         digits_list = list(digits)
         digits_list[pos], digits_list[pos + 1] = digits_list[pos + 1], digits_list[pos]
-        new_digits = ''.join(digits_list)
+        new_digits = "".join(digits_list)
 
         # Preserve original format (with or without dashes)
-        if '-' in ssn:
+        if "-" in ssn:
             # Format as XXX-XX-XXXX
             return f"{new_digits[:3]}-{new_digits[3:5]}-{new_digits[5:]}"
         else:
@@ -58,7 +59,7 @@ class SSNDigitError(BaseError):
         ssn = str(value)
 
         # Extract digits only
-        digits = re.sub(r'\D', '', ssn)
+        digits = re.sub(r"\D", "", ssn)
 
         if len(digits) < 1:
             return value
@@ -71,10 +72,10 @@ class SSNDigitError(BaseError):
         while new_digit == digits[pos]:
             new_digit = str(self.rng.integers(0, 10))
 
-        new_digits = digits[:pos] + new_digit + digits[pos+1:]
+        new_digits = digits[:pos] + new_digit + digits[pos + 1 :]
 
         # Preserve original format
-        if '-' in ssn:
+        if "-" in ssn:
             return f"{new_digits[:3]}-{new_digits[3:5]}-{new_digits[5:]}"
         else:
             return new_digits
@@ -96,13 +97,13 @@ class SSNFormatVariation(BaseError):
         ssn = str(value)
 
         # Extract digits only
-        digits = re.sub(r'\D', '', ssn)
+        digits = re.sub(r"\D", "", ssn)
 
         if len(digits) != 9:
             return value
 
         # Toggle format
-        if '-' in ssn:
+        if "-" in ssn:
             # Remove dashes
             return digits
         else:
@@ -144,7 +145,7 @@ class DriversLicenseError(BaseError):
             # Non-alphanumeric, return original
             return value
 
-        return license_num[:pos] + new_char + license_num[pos+1:]
+        return license_num[:pos] + new_char + license_num[pos + 1 :]
 
 
 class PassportError(BaseError):
@@ -178,4 +179,4 @@ class PassportError(BaseError):
         else:
             return value
 
-        return passport[:pos] + new_char + passport[pos+1:]
+        return passport[:pos] + new_char + passport[pos + 1 :]

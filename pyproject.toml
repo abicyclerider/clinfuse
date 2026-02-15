@@ -1,0 +1,31 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = ["fine-tuning", "synthea-runner"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "E712"]
+
+[tool.ruff.lint.per-file-ignores]
+"analysis/*" = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false
+ignore_missing_imports = true
+check_untyped_defs = true
+implicit_optional = true
+disable_error_code = ["var-annotated", "assignment", "arg-type", "call-overload", "return-value", "index", "operator"]
+
+[tool.pytest.ini_options]
+testpaths = ["augmentation/tests", "entity-resolution/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+]

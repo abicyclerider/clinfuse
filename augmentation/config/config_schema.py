@@ -1,7 +1,8 @@
 """Configuration schema using Pydantic for type-safe validation."""
 
-from typing import Dict, Literal
 from pathlib import Path
+from typing import Dict, Literal
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -9,14 +10,12 @@ class FacilityDistributionConfig(BaseModel):
     """Configuration for patient-to-facility distribution."""
 
     num_facilities: int = Field(
-        default=10,
-        ge=1,
-        description="Total number of facilities to generate"
+        default=10, ge=1, description="Total number of facilities to generate"
     )
 
     strategy: Literal["chronological_switching"] = Field(
         default="chronological_switching",
-        description="Strategy for distributing encounters across facilities"
+        description="Strategy for distributing encounters across facilities",
     )
 
     facility_count_weights: Dict[int, float] = Field(
@@ -25,19 +24,19 @@ class FacilityDistributionConfig(BaseModel):
             2: 0.30,  # 30% at 2 facilities
             3: 0.15,
             4: 0.10,
-            5: 0.05   # 5% at 5+ facilities
+            5: 0.05,  # 5% at 5+ facilities
         },
-        description="Probability weights for number of facilities per patient"
+        description="Probability weights for number of facilities per patient",
     )
 
     primary_facility_weight: float = Field(
         default=0.60,
         ge=0.0,
         le=1.0,
-        description="Proportion of encounters at primary facility (for multi-facility patients)"
+        description="Proportion of encounters at primary facility (for multi-facility patients)",
     )
 
-    @field_validator('facility_count_weights')
+    @field_validator("facility_count_weights")
     @classmethod
     def validate_weights_sum_to_one(cls, v: Dict[int, float]) -> Dict[int, float]:
         """Ensure facility count weights sum to approximately 1.0."""
@@ -46,7 +45,7 @@ class FacilityDistributionConfig(BaseModel):
             raise ValueError(f"Facility count weights must sum to 1.0, got {total}")
         return v
 
-    @field_validator('facility_count_weights')
+    @field_validator("facility_count_weights")
     @classmethod
     def validate_positive_keys(cls, v: Dict[int, float]) -> Dict[int, float]:
         """Ensure all keys are positive integers."""
@@ -62,14 +61,14 @@ class ErrorInjectionConfig(BaseModel):
         default=0.35,
         ge=0.0,
         le=1.0,
-        description="Probability that a patient record has at least one error"
+        description="Probability that a patient record has at least one error",
     )
 
     multiple_errors_probability: float = Field(
         default=0.20,
         ge=0.0,
         le=1.0,
-        description="Probability of multiple errors given at least one error"
+        description="Probability of multiple errors given at least one error",
     )
 
     error_type_weights: Dict[str, float] = Field(
@@ -80,10 +79,10 @@ class ErrorInjectionConfig(BaseModel):
             "ssn_error": 0.10,
             "formatting_error": 0.20,
         },
-        description="Relative weights for different error types"
+        description="Relative weights for different error types",
     )
 
-    @field_validator('error_type_weights')
+    @field_validator("error_type_weights")
     @classmethod
     def validate_weights_sum_to_one(cls, v: Dict[str, float]) -> Dict[str, float]:
         """Ensure error type weights sum to approximately 1.0."""
@@ -96,15 +95,11 @@ class ErrorInjectionConfig(BaseModel):
 class PathConfig(BaseModel):
     """Configuration for input/output paths."""
 
-    input_dir: Path = Field(
-        description="Path to Synthea CSV directory"
-    )
+    input_dir: Path = Field(description="Path to Synthea CSV directory")
 
-    output_dir: Path = Field(
-        description="Path to output directory for augmented data"
-    )
+    output_dir: Path = Field(description="Path to output directory for augmented data")
 
-    @field_validator('input_dir')
+    @field_validator("input_dir")
     @classmethod
     def validate_input_exists(cls, v: Path) -> Path:
         """Ensure input directory exists."""
@@ -122,23 +117,17 @@ class AugmentationConfig(BaseModel):
         default_factory=FacilityDistributionConfig
     )
 
-    error_injection: ErrorInjectionConfig = Field(
-        default_factory=ErrorInjectionConfig
-    )
+    error_injection: ErrorInjectionConfig = Field(default_factory=ErrorInjectionConfig)
 
     paths: PathConfig
 
-    random_seed: int = Field(
-        default=42,
-        description="Random seed for reproducibility"
-    )
+    random_seed: int = Field(default=42, description="Random seed for reproducibility")
 
     validate_output: bool = Field(
-        default=True,
-        description="Run validation checks after augmentation"
+        default=True, description="Run validation checks after augmentation"
     )
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_facility_distribution(self):
         """Ensure num_facilities is sufficient for weights."""
         max_facilities_in_weights = max(

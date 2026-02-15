@@ -6,18 +6,21 @@ Runs locally — loads Synthea data via shared/ modules, generates balanced
 train/eval/test pairs with chat-formatted messages, and pushes to HF Hub.
 
 Usage:
-    python prepare_dataset.py
+    python prepare_dataset.py --augmented-dir output/training/augmented
+    python prepare_dataset.py --augmented-dir output/training/augmented --output-dir output/training/dataset
     python prepare_dataset.py --max-length 2048  # filter long pairs (for local training)
     python prepare_dataset.py --no-push           # build dataset without pushing
 """
 
 import argparse
+import json
 import os
 import random
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
-import pandas as pd
 from datasets import Dataset, DatasetDict
 from dotenv import load_dotenv
 from huggingface_hub import login, whoami
@@ -38,9 +41,11 @@ from shared.ground_truth import (
 from shared.medical_records import load_medical_records
 from shared.summarize import INSTRUCTION, summarize_diff_friendly_from_records
 
+# Only load the record types the summarizer actually uses
+SUMMARIZER_RECORD_TYPES = ["conditions", "medications", "allergies", "observations", "procedures"]
+
 MODEL_ID = "google/gemma-3-1b-it"
 DATASET_REPO = "abicyclerider/entity-resolution-pairs"
-RUN_DIR = os.path.join(PROJECT_ROOT, "output", "augmented", "run_20260211_063607")
 
 
 def format_pair(summary_a, summary_b, label):
@@ -55,13 +60,45 @@ def format_pair(summary_a, summary_b, label):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prepare entity resolution dataset for HF Hub")
-    parser.add_argument("--max-length", type=int, default=0,
-                        help="Filter pairs exceeding this token length (0 = no filter)")
-    parser.add_argument("--no-push", action="store_true",
-                        help="Build dataset locally without pushing to Hub")
+    parser = argparse.ArgumentParser(
+        description="Prepare entity resolution dataset for HF Hub"
+    )
+    parser.add_argument(
+        "--augmented-dir",
+        type=str,
+        default=None,
+        help="Path to augmented output directory (default: output/augmented)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory to write dataset_info.json sentinel",
+    )
+    parser.add_argument(
+        "--max-length",
+        type=int,
+        default=0,
+        help="Filter pairs exceeding this token length (0 = no filter)",
+    )
+    parser.add_argument(
+        "--no-push",
+        action="store_true",
+        help="Build dataset locally without pushing to Hub",
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
+
+    # Resolve augmented directory and auto-detect latest run_* subdir
+    augmented_dir = args.augmented_dir or os.path.join(
+        PROJECT_ROOT, "output", "augmented"
+    )
+    run_dirs = sorted(Path(augmented_dir).glob("run_*"))
+    if not run_dirs:
+        raise FileNotFoundError(f"No run_* directories found in {augmented_dir}")
+    RUN_DIR = str(run_dirs[-1])
+    run_dir_name = run_dirs[-1].name
+    print(f"Using augmented data: {RUN_DIR}")
 
     # HF login
     if not args.no_push:
@@ -79,7 +116,9 @@ def main():
     # Load data
     print(f"Loading data from {RUN_DIR}...")
     patients_df = load_facility_patients(RUN_DIR)
-    patients_df["record_id"] = patients_df["facility_id"] + "_" + patients_df["id"].astype(str)
+    patients_df["record_id"] = (
+        patients_df["facility_id"] + "_" + patients_df["id"].astype(str)
+    )
 
     ground_truth_df = load_ground_truth(RUN_DIR)
     ground_truth_df = add_record_ids_to_ground_truth(ground_truth_df, patients_df)
@@ -114,7 +153,7 @@ def main():
 
     # Load medical records and build summaries
     print("\nLoading medical records...")
-    medical_records = load_medical_records(RUN_DIR)
+    medical_records = load_medical_records(RUN_DIR, record_types=SUMMARIZER_RECORD_TYPES)
 
     # Pre-index medical records by (PATIENT, facility_id) for O(1) lookups
     print("Indexing medical records...")
@@ -153,8 +192,10 @@ def main():
 
     # Token length stats
     token_lengths = [len(tokenizer.encode(s)) for s in summary_cache.values()]
-    print(f"\nSingle summary token lengths:")
-    print(f"  Mean: {np.mean(token_lengths):.0f}, Median: {np.median(token_lengths):.0f}")
+    print("\nSingle summary token lengths:")
+    print(
+        f"  Mean: {np.mean(token_lengths):.0f}, Median: {np.median(token_lengths):.0f}"
+    )
     print(f"  Min: {min(token_lengths)}, Max: {max(token_lengths)}")
     print(f"  95th pctl: {np.percentile(token_lengths, 95):.0f}")
 
@@ -173,6 +214,7 @@ def main():
 
     # Optional max_length filter
     if args.max_length > 0:
+
         def pair_seq_length(r1, r2, label):
             prompt = INSTRUCTION.format(
                 summary_a=summary_cache[r1], summary_b=summary_cache[r2]
@@ -191,8 +233,10 @@ def main():
             if pair_seq_length(r1, r2, l) <= args.max_length
         ]
         n_dropped = n_before - len(all_pairs)
-        print(f"\nDropped {n_dropped}/{n_before} pairs exceeding {args.max_length} tokens "
-              f"({n_dropped / n_before * 100:.1f}%)")
+        print(
+            f"\nDropped {n_dropped}/{n_before} pairs exceeding {args.max_length} tokens "
+            f"({n_dropped / n_before * 100:.1f}%)"
+        )
 
     matches = [p for p in all_pairs if p[2]]
     non_matches = [p for p in all_pairs if not p[2]]
@@ -204,7 +248,9 @@ def main():
     n_test = n_total - n_train - n_eval
 
     train_pairs = matches[:n_train] + non_matches[:n_train]
-    eval_pairs = matches[n_train : n_train + n_eval] + non_matches[n_train : n_train + n_eval]
+    eval_pairs = (
+        matches[n_train : n_train + n_eval] + non_matches[n_train : n_train + n_eval]
+    )
     test_pairs = (
         matches[n_train + n_eval : n_train + n_eval + n_test]
         + non_matches[n_train + n_eval : n_train + n_eval + n_test]
@@ -224,13 +270,19 @@ def main():
     eval_data = build_split(eval_pairs)
     test_data = build_split(test_pairs)
 
-    print(f"\nSplits:")
-    print(f"  Train: {len(train_data)} ({sum(1 for _, _, l in train_pairs if l)} match + "
-          f"{sum(1 for _, _, l in train_pairs if not l)} non-match)")
-    print(f"  Eval:  {len(eval_data)} ({sum(1 for _, _, l in eval_pairs if l)} match + "
-          f"{sum(1 for _, _, l in eval_pairs if not l)} non-match)")
-    print(f"  Test:  {len(test_data)} ({sum(1 for _, _, l in test_pairs if l)} match + "
-          f"{sum(1 for _, _, l in test_pairs if not l)} non-match)")
+    print("\nSplits:")
+    print(
+        f"  Train: {len(train_data)} ({sum(1 for _, _, l in train_pairs if l)} match + "
+        f"{sum(1 for _, _, l in train_pairs if not l)} non-match)"
+    )
+    print(
+        f"  Eval:  {len(eval_data)} ({sum(1 for _, _, l in eval_pairs if l)} match + "
+        f"{sum(1 for _, _, l in eval_pairs if not l)} non-match)"
+    )
+    print(
+        f"  Test:  {len(test_data)} ({sum(1 for _, _, l in test_pairs if l)} match + "
+        f"{sum(1 for _, _, l in test_pairs if not l)} non-match)"
+    )
 
     # Pair token length stats
     pair_lengths = []
@@ -238,7 +290,7 @@ def main():
         text = tokenizer.apply_chat_template(ex["messages"], tokenize=False)
         pair_lengths.append(len(tokenizer.encode(text)))
 
-    print(f"\nPair sequence lengths (all splits, with chat template):")
+    print("\nPair sequence lengths (all splits, with chat template):")
     print(f"  Mean: {np.mean(pair_lengths):.0f}, Median: {np.median(pair_lengths):.0f}")
     print(f"  Min: {min(pair_lengths)}, Max: {max(pair_lengths)}")
     print(f"  95th pctl: {np.percentile(pair_lengths, 95):.0f}")
@@ -260,6 +312,25 @@ def main():
         print("Done! Dataset available on HF Hub.")
     else:
         print("\n--no-push specified, skipping upload.")
+
+    # Write dataset_info.json sentinel
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        info = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hf_repo": DATASET_REPO,
+            "splits": {
+                "train": len(train_data),
+                "eval": len(eval_data),
+                "test": len(test_data),
+            },
+            "run_dir": run_dir_name,
+            "seed": args.seed,
+        }
+        info_path = os.path.join(args.output_dir, "dataset_info.json")
+        with open(info_path, "w") as f:
+            json.dump(info, f, indent=2)
+        print(f"\nDataset info written to {info_path}")
 
 
 if __name__ == "__main__":

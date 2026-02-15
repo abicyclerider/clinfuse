@@ -58,6 +58,7 @@ def load_model(model_id=MODEL_ID, quantize_4bit=True, device="cuda"):
     load_kwargs = {}
     if quantize_4bit and device == "cuda":
         from transformers import BitsAndBytesConfig
+
         print(f"Loading {model_id} with 4-bit NF4 quantization...")
         load_kwargs["device_map"] = "auto"
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
@@ -117,7 +118,9 @@ def evaluate_test_split(model, tokenizer, batch_size, max_length, output_csv):
     labels = [1 if ex["messages"][1]["content"] == "True" else 0 for ex in dataset]
     labels = np.array(labels)
 
-    print(f"  Label distribution: {labels.sum()} positive, {len(labels) - labels.sum()} negative")
+    print(
+        f"  Label distribution: {labels.sum()} positive, {len(labels) - labels.sum()} negative"
+    )
 
     # Batched inference
     all_preds = []
@@ -144,36 +147,46 @@ def evaluate_test_split(model, tokenizer, batch_size, max_length, output_csv):
     all_confs = np.array(all_confs)
 
     # Metrics
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Test Set Results ({len(texts)} examples, {elapsed:.1f}s)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Accuracy:  {accuracy_score(labels, all_preds):.4f}")
     print(f"  Precision: {precision_score(labels, all_preds, zero_division=0):.4f}")
     print(f"  Recall:    {recall_score(labels, all_preds, zero_division=0):.4f}")
     print(f"  F1:        {f1_score(labels, all_preds, zero_division=0):.4f}")
-    print(f"\nClassification Report:")
-    print(classification_report(labels, all_preds, target_names=["Non-match (0)", "Match (1)"]))
+    print("\nClassification Report:")
+    print(
+        classification_report(
+            labels, all_preds, target_names=["Non-match (0)", "Match (1)"]
+        )
+    )
 
     # Save predictions
-    df = pd.DataFrame({
-        "text": [t[:200] + "..." if len(t) > 200 else t for t in texts],
-        "label": labels,
-        "prediction": all_preds,
-        "confidence": np.round(all_confs, 4),
-        "correct": (labels == all_preds).astype(int),
-    })
+    df = pd.DataFrame(
+        {
+            "text": [t[:200] + "..." if len(t) > 200 else t for t in texts],
+            "label": labels,
+            "prediction": all_preds,
+            "confidence": np.round(all_confs, 4),
+            "correct": (labels == all_preds).astype(int),
+        }
+    )
     df.to_csv(output_csv, index=False)
     print(f"Predictions saved to {output_csv}")
 
     # Error analysis summary
     errors = df[df["correct"] == 0]
     if len(errors) > 0:
-        print(f"\nError summary: {len(errors)} misclassified ({len(errors)/len(df)*100:.1f}%)")
+        print(
+            f"\nError summary: {len(errors)} misclassified ({len(errors) / len(df) * 100:.1f}%)"
+        )
         fp = ((all_preds == 1) & (labels == 0)).sum()
         fn = ((all_preds == 0) & (labels == 1)).sum()
         print(f"  False positives: {fp}, False negatives: {fn}")
         print(f"  Avg confidence on errors: {errors['confidence'].mean():.4f}")
-        print(f"  Avg confidence on correct: {df[df['correct']==1]['confidence'].mean():.4f}")
+        print(
+            f"  Avg confidence on correct: {df[df['correct'] == 1]['confidence'].mean():.4f}"
+        )
 
 
 def classify_csv(model, tokenizer, input_csv, output_csv, batch_size, max_length):
@@ -182,66 +195,9 @@ def classify_csv(model, tokenizer, input_csv, output_csv, batch_size, max_length
     df = pd.read_csv(input_csv)
 
     if "text" not in df.columns:
-        print(f"ERROR: CSV must have a 'text' column. Found columns: {list(df.columns)}")
-        sys.exit(1)
-
-    texts = df["text"].tolist()
-    has_labels = "label" in df.columns
-    print(f"  Loaded {len(texts)} examples" + (f" (with labels)" if has_labels else ""))
-
-    # Batched inference
-    all_preds = []
-    all_confs = []
-    n_batches = (len(texts) + batch_size - 1) // batch_size
-
-    print(f"\nRunning inference ({n_batches} batches, batch_size={batch_size})...")
-    t0 = time.time()
-
-    for i in range(0, len(texts), batch_size):
-        batch_texts = texts[i : i + batch_size]
-        preds, confs = predict_batch(model, tokenizer, batch_texts, max_length)
-        all_preds.extend(preds)
-        all_confs.extend(confs)
-
-        batch_num = i // batch_size + 1
-        if batch_num % 10 == 0 or batch_num == n_batches:
-            elapsed = time.time() - t0
-            rate = (i + len(batch_texts)) / elapsed
-            print(f"  Batch {batch_num}/{n_batches} — {rate:.1f} examples/sec")
-
-    elapsed = time.time() - t0
-    all_preds = np.array(all_preds)
-    all_confs = np.array(all_confs)
-
-    # Build output
-    result = pd.DataFrame({
-        "text": [t[:200] + "..." if len(t) > 200 else t for t in texts],
-        "prediction": all_preds,
-        "confidence": np.round(all_confs, 4),
-    })
-
-    if has_labels:
-        labels = df["label"].values
-        result.insert(1, "label", labels)
-        result["correct"] = (labels == all_preds).astype(int)
-        print(f"\n  Accuracy: {accuracy_score(labels, all_preds):.4f}")
-        print(f"  F1:       {f1_score(labels, all_preds, zero_division=0):.4f}")
-
-    result.to_csv(output_csv, index=False)
-    print(f"\n{len(texts)} predictions saved to {output_csv} ({elapsed:.1f}s)")
-    print(f"  Predicted match: {(all_preds == 1).sum()}, non-match: {(all_preds == 0).sum()}")
-
-
-def classify_hf_dataset(model, tokenizer, hf_input, hf_output, batch_size, max_length):
-    """Load a dataset from HF Hub, run batched inference, push results back."""
-    from datasets import Dataset, load_dataset
-
-    print(f"\nLoading dataset from HF Hub: {hf_input}")
-    ds = load_dataset(hf_input, split="train")
-    df = ds.to_pandas()
-
-    if "text" not in df.columns:
-        print(f"ERROR: Dataset must have a 'text' column. Found columns: {list(df.columns)}")
+        print(
+            f"ERROR: CSV must have a 'text' column. Found columns: {list(df.columns)}"
+        )
         sys.exit(1)
 
     texts = df["text"].tolist()
@@ -272,8 +228,73 @@ def classify_hf_dataset(model, tokenizer, hf_input, hf_output, batch_size, max_l
     all_preds = np.array(all_preds)
     all_confs = np.array(all_confs)
 
-    # Build output — preserve all input columns, add prediction + confidence
-    result = df.copy()
+    # Build output
+    result = pd.DataFrame(
+        {
+            "text": [t[:200] + "..." if len(t) > 200 else t for t in texts],
+            "prediction": all_preds,
+            "confidence": np.round(all_confs, 4),
+        }
+    )
+
+    if has_labels:
+        labels = df["label"].values
+        result.insert(1, "label", labels)
+        result["correct"] = (labels == all_preds).astype(int)
+        print(f"\n  Accuracy: {accuracy_score(labels, all_preds):.4f}")
+        print(f"  F1:       {f1_score(labels, all_preds, zero_division=0):.4f}")
+
+    result.to_csv(output_csv, index=False)
+    print(f"\n{len(texts)} predictions saved to {output_csv} ({elapsed:.1f}s)")
+    print(
+        f"  Predicted match: {(all_preds == 1).sum()}, non-match: {(all_preds == 0).sum()}"
+    )
+
+
+def classify_hf_dataset(model, tokenizer, hf_input, hf_output, batch_size, max_length):
+    """Load a dataset from HF Hub, run batched inference, push results back."""
+    from datasets import Dataset, load_dataset
+
+    print(f"\nLoading dataset from HF Hub: {hf_input}")
+    ds = load_dataset(hf_input, split="train")
+    df = ds.to_pandas()
+
+    if "text" not in df.columns:
+        print(
+            f"ERROR: Dataset must have a 'text' column. Found columns: {list(df.columns)}"
+        )
+        sys.exit(1)
+
+    texts = df["text"].tolist()
+    has_labels = "label" in df.columns
+    print(f"  Loaded {len(texts)} examples" + (" (with labels)" if has_labels else ""))
+
+    # Batched inference
+    all_preds = []
+    all_confs = []
+    n_batches = (len(texts) + batch_size - 1) // batch_size
+
+    print(f"\nRunning inference ({n_batches} batches, batch_size={batch_size})...")
+    t0 = time.time()
+
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i : i + batch_size]
+        preds, confs = predict_batch(model, tokenizer, batch_texts, max_length)
+        all_preds.extend(preds)
+        all_confs.extend(confs)
+
+        batch_num = i // batch_size + 1
+        if batch_num % 10 == 0 or batch_num == n_batches:
+            elapsed = time.time() - t0
+            rate = (i + len(batch_texts)) / elapsed
+            print(f"  Batch {batch_num}/{n_batches} — {rate:.1f} examples/sec")
+
+    elapsed = time.time() - t0
+    all_preds = np.array(all_preds)
+    all_confs = np.array(all_confs)
+
+    # Build output — preserve input columns (except text), add prediction + confidence
+    result = df.drop(columns=["text"], errors="ignore").copy()
     result["prediction"] = all_preds
     result["confidence"] = np.round(all_confs, 4)
 
@@ -284,7 +305,9 @@ def classify_hf_dataset(model, tokenizer, hf_input, hf_output, batch_size, max_l
         print(f"  F1:       {f1_score(labels, all_preds, zero_division=0):.4f}")
 
     print(f"\n{len(texts)} predictions completed ({elapsed:.1f}s)")
-    print(f"  Predicted match: {(all_preds == 1).sum()}, non-match: {(all_preds == 0).sum()}")
+    print(
+        f"  Predicted match: {(all_preds == 1).sum()}, non-match: {(all_preds == 0).sum()}"
+    )
 
     # Push to HF Hub
     if hf_output:
@@ -306,11 +329,14 @@ def stop_runpod_pod():
         return
     try:
         import requests
+
         print(f"\nStopping RunPod pod {pod_id}...")
         resp = requests.post(
             "https://api.runpod.io/graphql",
             headers={"Authorization": f"Bearer {api_key}"},
-            json={"query": f'mutation {{ podStop(input: {{podId: "{pod_id}"}}) {{ id }} }}'},
+            json={
+                "query": f'mutation {{ podStop(input: {{podId: "{pod_id}"}}) {{ id }} }}'
+            },
             timeout=30,
         )
         resp.raise_for_status()
@@ -343,18 +369,38 @@ def main():
     )
 
     # Options
-    parser.add_argument("--output-csv", type=str, default="predictions.csv",
-                        help="Path for output predictions CSV (default: predictions.csv)")
-    parser.add_argument("--batch-size", type=int, default=16,
-                        help="Inference batch size (default: 16)")
-    parser.add_argument("--max-length", type=int, default=2048,
-                        help="Max sequence length for tokenization (default: 2048)")
-    parser.add_argument("--no-quantize", action="store_true",
-                        help="Load in bf16 instead of 4-bit NF4 (needs more VRAM)")
-    parser.add_argument("--hf-output", type=str, default=None,
-                        help="HF Hub repo to push predictions to (requires --hf-input)")
-    parser.add_argument("--model-id", type=str, default=MODEL_ID,
-                        help=f"HF model repo (default: {MODEL_ID})")
+    parser.add_argument(
+        "--output-csv",
+        type=str,
+        default="predictions.csv",
+        help="Path for output predictions CSV (default: predictions.csv)",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=16, help="Inference batch size (default: 16)"
+    )
+    parser.add_argument(
+        "--max-length",
+        type=int,
+        default=2048,
+        help="Max sequence length for tokenization (default: 2048)",
+    )
+    parser.add_argument(
+        "--no-quantize",
+        action="store_true",
+        help="Load in bf16 instead of 4-bit NF4 (needs more VRAM)",
+    )
+    parser.add_argument(
+        "--hf-output",
+        type=str,
+        default=None,
+        help="HF Hub repo to push predictions to (requires --hf-input)",
+    )
+    parser.add_argument(
+        "--model-id",
+        type=str,
+        default=MODEL_ID,
+        help=f"HF model repo (default: {MODEL_ID})",
+    )
     args = parser.parse_args()
 
     if args.hf_output and not args.hf_input:
@@ -389,13 +435,27 @@ def main():
 
         # Run inference
         if args.dataset:
-            evaluate_test_split(model, tokenizer, args.batch_size, args.max_length, args.output_csv)
+            evaluate_test_split(
+                model, tokenizer, args.batch_size, args.max_length, args.output_csv
+            )
         elif args.hf_input:
-            classify_hf_dataset(model, tokenizer, args.hf_input, args.hf_output,
-                                args.batch_size, args.max_length)
+            classify_hf_dataset(
+                model,
+                tokenizer,
+                args.hf_input,
+                args.hf_output,
+                args.batch_size,
+                args.max_length,
+            )
         else:
-            classify_csv(model, tokenizer, args.input_csv, args.output_csv,
-                         args.batch_size, args.max_length)
+            classify_csv(
+                model,
+                tokenizer,
+                args.input_csv,
+                args.output_csv,
+                args.batch_size,
+                args.max_length,
+            )
     finally:
         stop_runpod_pod()
 

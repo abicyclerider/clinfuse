@@ -1,10 +1,11 @@
 """Ground truth tracking and output generation."""
 
-from typing import Dict, List
-from pathlib import Path
-import pandas as pd
 import json
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List
+
+import pandas as pd
 
 
 class GroundTruthTracker:
@@ -89,9 +90,9 @@ class GroundTruthTracker:
         """
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             for record in self.error_log:
-                f.write(json.dumps(record) + '\n')
+                f.write(json.dumps(record) + "\n")
 
     def generate_statistics(self) -> Dict:
         """
@@ -114,14 +115,22 @@ class GroundTruthTracker:
         unique_patients = df["original_patient_uuid"].nunique()
 
         # Count patients with errors
-        patients_with_errors = df[df["errors_applied"] != "none"]["original_patient_uuid"].nunique()
+        patients_with_errors = df[df["errors_applied"] != "none"][
+            "original_patient_uuid"
+        ].nunique()
 
         # Calculate error rate
-        error_rate = patients_with_errors / unique_patients if unique_patients > 0 else 0.0
+        error_rate = (
+            patients_with_errors / unique_patients if unique_patients > 0 else 0.0
+        )
 
         # Count patients by number of facilities
-        patients_per_facility_count = df.groupby("original_patient_uuid")["facility_id"].count()
-        facility_count_distribution = patients_per_facility_count.value_counts().to_dict()
+        patients_per_facility_count = df.groupby("original_patient_uuid")[
+            "facility_id"
+        ].count()
+        facility_count_distribution = (
+            patients_per_facility_count.value_counts().to_dict()
+        )
 
         return {
             "total_patient_facility_pairs": len(self.patient_facility_records),
@@ -132,7 +141,9 @@ class GroundTruthTracker:
             "total_error_transformations": len(self.error_log),
         }
 
-    def export_statistics_json(self, output_path: Path, additional_stats: Dict = None) -> None:
+    def export_statistics_json(
+        self, output_path: Path, additional_stats: Dict = None
+    ) -> None:
         """
         Export statistics as JSON.
 
@@ -147,5 +158,5 @@ class GroundTruthTracker:
         if additional_stats:
             stats.update(additional_stats)
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(stats, f, indent=2)

@@ -4,9 +4,8 @@ Shared evaluation metrics for entity resolution.
 Compares predicted matches against ground truth to calculate precision, recall, F1.
 """
 
-import pandas as pd
-from typing import Tuple
 import logging
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +24,19 @@ def evaluate_matches(predicted_pairs: set, true_pairs: set) -> dict:
     tp, fp, fn = calculate_confusion_matrix(predicted_pairs, true_pairs)
     metrics = calculate_metrics(tp, fp, fn)
 
-    metrics['predicted_pairs'] = len(predicted_pairs)
-    metrics['true_pairs'] = len(true_pairs)
+    metrics["predicted_pairs"] = len(predicted_pairs)
+    metrics["true_pairs"] = len(true_pairs)
 
-    logger.info(f"Evaluation: P={metrics['precision']:.3f}, R={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}")
+    logger.info(
+        f"Evaluation: P={metrics['precision']:.3f}, R={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}"
+    )
 
     return metrics
 
 
-def calculate_confusion_matrix(predicted_pairs: set, true_pairs: set) -> Tuple[int, int, int]:
+def calculate_confusion_matrix(
+    predicted_pairs: set, true_pairs: set
+) -> Tuple[int, int, int]:
     """
     Calculate confusion matrix components.
 
@@ -68,13 +71,17 @@ def calculate_metrics(tp: int, fp: int, fn: int) -> dict:
     """
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    f1_score = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
 
     return {
-        'true_positives': tp,
-        'false_positives': fp,
-        'false_negatives': fn,
-        'precision': precision,
-        'recall': recall,
-        'f1_score': f1_score
+        "true_positives": tp,
+        "false_positives": fp,
+        "false_negatives": fn,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1_score,
     }

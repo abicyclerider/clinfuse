@@ -5,41 +5,47 @@ Loads all clinical CSV types (encounters, conditions, medications, etc.)
 with facility_id tagging for cross-facility patient matching.
 """
 
-import pandas as pd
-from pathlib import Path
 import logging
+from pathlib import Path
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 # Clinical record types to load (excludes financial: claims, claims_transactions)
 CLINICAL_RECORD_TYPES = [
-    'encounters',
-    'conditions',
-    'medications',
-    'observations',
-    'procedures',
-    'immunizations',
-    'allergies',
-    'careplans',
-    'imaging_studies',
-    'devices',
-    'supplies',
+    "encounters",
+    "conditions",
+    "medications",
+    "observations",
+    "procedures",
+    "immunizations",
+    "allergies",
+    "careplans",
+    "imaging_studies",
+    "devices",
+    "supplies",
 ]
 
 
-def load_medical_records(run_dir: str) -> dict[str, pd.DataFrame]:
+def load_medical_records(
+    run_dir: str, record_types: list[str] | None = None
+) -> dict[str, pd.DataFrame]:
     """
-    Load all clinical record types from all facilities.
+    Load clinical record types from all facilities.
 
     Returns dict keyed by record type (e.g., 'conditions', 'medications').
     Each DataFrame has facility_id + PATIENT columns for joining with patient data.
 
     Args:
         run_dir: Path to augmentation run directory
+        record_types: Record types to load (default: all CLINICAL_RECORD_TYPES)
 
     Returns:
         Dictionary mapping record type name to DataFrame with all facilities combined
     """
+    types_to_load = record_types or CLINICAL_RECORD_TYPES
+
     run_path = Path(run_dir)
     facilities_dir = run_path / "facilities"
 
@@ -51,22 +57,28 @@ def load_medical_records(run_dir: str) -> dict[str, pd.DataFrame]:
 
     records = {}
 
-    for record_type in CLINICAL_RECORD_TYPES:
+    for record_type in types_to_load:
         frames = []
 
         for facility_dir in facility_dirs:
+            parquet_path = facility_dir / f"{record_type}.parquet"
             csv_path = facility_dir / f"{record_type}.csv"
-            if not csv_path.exists():
-                continue
 
-            df = pd.read_csv(csv_path, low_memory=False)
-            df['facility_id'] = facility_dir.name
+            if parquet_path.exists():
+                df = pd.read_parquet(parquet_path)
+            elif csv_path.exists():
+                df = pd.read_csv(csv_path, low_memory=False)
+            else:
+                continue
+            df["facility_id"] = facility_dir.name
             frames.append(df)
 
         if frames:
             combined = pd.concat(frames, ignore_index=True)
             records[record_type] = combined
-            logger.debug(f"  {record_type}: {len(combined):,} rows from {len(frames)} facilities")
+            logger.debug(
+                f"  {record_type}: {len(combined):,} rows from {len(frames)} facilities"
+            )
         else:
             logger.warning(f"  {record_type}: no data found")
 
@@ -76,8 +88,9 @@ def load_medical_records(run_dir: str) -> dict[str, pd.DataFrame]:
     return records
 
 
-def get_patient_records(patient_id: str, facility_id: str,
-                        medical_records: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+def get_patient_records(
+    patient_id: str, facility_id: str, medical_records: dict[str, pd.DataFrame]
+) -> dict[str, pd.DataFrame]:
     """
     Filter medical records to a single patient at a single facility.
 
@@ -92,7 +105,7 @@ def get_patient_records(patient_id: str, facility_id: str,
     patient_records = {}
 
     for record_type, df in medical_records.items():
-        mask = (df['PATIENT'] == patient_id) & (df['facility_id'] == facility_id)
+        mask = (df["PATIENT"] == patient_id) & (df["facility_id"] == facility_id)
         patient_df = df[mask]
         if not patient_df.empty:
             patient_records[record_type] = patient_df

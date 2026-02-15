@@ -5,13 +5,12 @@ Compares predicted matches against ground truth to calculate precision, recall, 
 Delegates core metrics to shared.evaluation.
 """
 
+import logging
 import sys
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
-from typing import Dict, Tuple
-import logging
+import pandas as pd
 
 # Add project root to path so shared module is importable
 _project_root = str(Path(__file__).resolve().parent.parent.parent)
@@ -26,8 +25,11 @@ from shared.evaluation import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-def evaluate_matches(predicted_matches: pd.Series, ground_truth: pd.DataFrame,
-                    patient_data: pd.DataFrame = None) -> dict:
+def evaluate_matches(
+    predicted_matches: pd.Series,
+    ground_truth: pd.DataFrame,
+    patient_data: pd.DataFrame = None,
+) -> dict:
     """
     Evaluate predicted matches against ground truth.
 
@@ -45,10 +47,12 @@ def evaluate_matches(predicted_matches: pd.Series, ground_truth: pd.DataFrame,
     tp, fp, fn = calculate_confusion_matrix(predicted_pairs, true_pairs)
     metrics = calculate_metrics(tp, fp, fn)
 
-    metrics['predicted_pairs'] = len(predicted_pairs)
-    metrics['true_pairs'] = len(true_pairs)
+    metrics["predicted_pairs"] = len(predicted_pairs)
+    metrics["true_pairs"] = len(true_pairs)
 
-    logger.info(f"Evaluation: P={metrics['precision']:.3f}, R={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}")
+    logger.info(
+        f"Evaluation: P={metrics['precision']:.3f}, R={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}"
+    )
 
     return metrics
 
@@ -63,12 +67,18 @@ def generate_true_pairs_from_ground_truth(ground_truth: pd.DataFrame) -> set:
     Returns:
         Set of tuples (record_id_1, record_id_2) for true matches
     """
-    true_id_col = 'true_patient_id' if 'true_patient_id' in ground_truth.columns else 'original_patient_uuid'
+    true_id_col = (
+        "true_patient_id"
+        if "true_patient_id" in ground_truth.columns
+        else "original_patient_uuid"
+    )
 
     true_pairs = set()
 
     for true_id, group in ground_truth.groupby(true_id_col):
-        record_ids = group['record_id'].dropna().tolist() if 'record_id' in group.columns else []
+        record_ids = (
+            group["record_id"].dropna().tolist() if "record_id" in group.columns else []
+        )
 
         for i in range(len(record_ids)):
             for j in range(i + 1, len(record_ids)):
@@ -78,8 +88,12 @@ def generate_true_pairs_from_ground_truth(ground_truth: pd.DataFrame) -> set:
     return true_pairs
 
 
-def error_analysis(predicted_matches: pd.Series, ground_truth: pd.DataFrame,
-                  features: pd.DataFrame, patient_data: pd.DataFrame) -> dict:
+def error_analysis(
+    predicted_matches: pd.Series,
+    ground_truth: pd.DataFrame,
+    features: pd.DataFrame,
+    patient_data: pd.DataFrame,
+) -> dict:
     """
     Analyze false positives and false negatives to understand errors.
 
@@ -103,19 +117,27 @@ def error_analysis(predicted_matches: pd.Series, ground_truth: pd.DataFrame,
 
     logger.info(f"Error analysis: {len(false_positives)} FP, {len(false_negatives)} FN")
 
-    fp_analysis = analyze_error_pairs(false_positives, features, patient_data, 'false_positive')
-    fn_analysis = analyze_error_pairs(false_negatives, features, patient_data, 'false_negative')
+    fp_analysis = analyze_error_pairs(
+        false_positives, features, patient_data, "false_positive"
+    )
+    fn_analysis = analyze_error_pairs(
+        false_negatives, features, patient_data, "false_negative"
+    )
 
     return {
-        'false_positives': fp_analysis,
-        'false_negatives': fn_analysis,
-        'fp_count': len(false_positives),
-        'fn_count': len(false_negatives)
+        "false_positives": fp_analysis,
+        "false_negatives": fn_analysis,
+        "fp_count": len(false_positives),
+        "fn_count": len(false_negatives),
     }
 
 
-def analyze_error_pairs(error_pairs: set, features: pd.DataFrame,
-                       patient_data: pd.DataFrame, error_type: str) -> pd.DataFrame:
+def analyze_error_pairs(
+    error_pairs: set,
+    features: pd.DataFrame,
+    patient_data: pd.DataFrame,
+    error_type: str,
+) -> pd.DataFrame:
     """
     Analyze characteristics of error pairs.
 
@@ -137,14 +159,16 @@ def analyze_error_pairs(error_pairs: set, features: pd.DataFrame,
             else:
                 feat_row = features.loc[(pair[1], pair[0])]
 
-            error_data.append({
-                'record_id_1': pair[0],
-                'record_id_2': pair[1],
-                'error_type': error_type,
-                'total_score': feat_row.get('total_score', feat_row.sum()),
-                'name_score': feat_row.get('name_score', None),
-                'address_score': feat_row.get('address_score', None)
-            })
+            error_data.append(
+                {
+                    "record_id_1": pair[0],
+                    "record_id_2": pair[1],
+                    "error_type": error_type,
+                    "total_score": feat_row.get("total_score", feat_row.sum()),
+                    "name_score": feat_row.get("name_score", None),
+                    "address_score": feat_row.get("address_score", None),
+                }
+            )
 
     if not error_data:
         return pd.DataFrame()
@@ -156,7 +180,9 @@ def analyze_error_pairs(error_pairs: set, features: pd.DataFrame,
     return error_df
 
 
-def evaluate_golden_records(golden_records: pd.DataFrame, ground_truth: pd.DataFrame) -> dict:
+def evaluate_golden_records(
+    golden_records: pd.DataFrame, ground_truth: pd.DataFrame
+) -> dict:
     """
     Evaluate quality of golden records against ground truth.
 
@@ -168,21 +194,25 @@ def evaluate_golden_records(golden_records: pd.DataFrame, ground_truth: pd.DataF
         Dictionary with golden record metrics
     """
     num_golden = len(golden_records)
-    true_id_col = 'true_patient_id' if 'true_patient_id' in ground_truth.columns else 'original_patient_uuid'
+    true_id_col = (
+        "true_patient_id"
+        if "true_patient_id" in ground_truth.columns
+        else "original_patient_uuid"
+    )
     num_true_patients = ground_truth[true_id_col].nunique()
 
     count_accuracy = num_golden == num_true_patients
 
     metrics = {
-        'num_golden_records': num_golden,
-        'num_true_patients': num_true_patients,
-        'count_accuracy': count_accuracy,
-        'count_difference': num_golden - num_true_patients
+        "num_golden_records": num_golden,
+        "num_true_patients": num_true_patients,
+        "count_accuracy": count_accuracy,
+        "count_difference": num_golden - num_true_patients,
     }
 
-    if 'num_records' in golden_records.columns:
-        metrics['avg_records_per_patient'] = golden_records['num_records'].mean()
-        metrics['max_records_per_patient'] = golden_records['num_records'].max()
+    if "num_records" in golden_records.columns:
+        metrics["avg_records_per_patient"] = golden_records["num_records"].mean()
+        metrics["max_records_per_patient"] = golden_records["num_records"].max()
 
     logger.info(f"Golden records: {num_golden} (expected {num_true_patients})")
 
@@ -201,8 +231,10 @@ def calculate_cluster_purity(clusters: list, ground_truth: pd.DataFrame) -> floa
         Average purity score (0-1)
     """
     record_to_true = {}
-    if 'record_id' in ground_truth.columns:
-        record_to_true = dict(zip(ground_truth['record_id'], ground_truth['true_patient_id']))
+    if "record_id" in ground_truth.columns:
+        record_to_true = dict(
+            zip(ground_truth["record_id"], ground_truth["true_patient_id"])
+        )
 
     purities = []
 
@@ -213,6 +245,7 @@ def calculate_cluster_purity(clusters: list, ground_truth: pd.DataFrame) -> floa
             continue
 
         from collections import Counter
+
         counter = Counter(true_ids)
         majority_count = counter.most_common(1)[0][1]
 

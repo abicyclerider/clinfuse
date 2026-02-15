@@ -1,8 +1,9 @@
 """Demographic error transformations (names, addresses, dates)."""
 
-from typing import Any, Dict, List
 import re
 from datetime import timedelta
+from typing import Any, Dict, List
+
 from .base_error import BaseError
 
 
@@ -11,22 +12,54 @@ class NicknameSubstitution(BaseError):
 
     # Common nickname mappings
     NICKNAME_MAP = {
-        "WILLIAM": "BILL", "ROBERT": "BOB", "RICHARD": "DICK",
-        "JAMES": "JIM", "JOHN": "JACK", "MICHAEL": "MIKE",
-        "DAVID": "DAVE", "JOSEPH": "JOE", "THOMAS": "TOM",
-        "CHARLES": "CHUCK", "CHRISTOPHER": "CHRIS", "DANIEL": "DAN",
-        "MATTHEW": "MATT", "ANTHONY": "TONY", "DONALD": "DON",
-        "KENNETH": "KEN", "STEVEN": "STEVE", "EDWARD": "ED",
-        "TIMOTHY": "TIM", "JEFFREY": "JEFF", "NICHOLAS": "NICK",
-        "JONATHAN": "JON", "BENJAMIN": "BEN", "SAMUEL": "SAM",
-        "ALEXANDER": "ALEX", "ANDREW": "ANDY", "JOSHUA": "JOSH",
-        "ELIZABETH": "LIZ", "PATRICIA": "PAT", "JENNIFER": "JENNY",
-        "LINDA": "LYNN", "BARBARA": "BARB", "SUSAN": "SUE",
-        "JESSICA": "JESS", "MARGARET": "PEGGY", "SARAH": "SALLY",
-        "KIMBERLY": "KIM", "DEBORAH": "DEB", "REBECCA": "BECKY",
-        "STEPHANIE": "STEPH", "CATHERINE": "CATHY", "CHRISTINE": "CHRIS",
-        "SAMANTHA": "SAM", "AMANDA": "MANDY", "MELISSA": "MEL",
-        "MICHELLE": "SHELLY", "KATHLEEN": "KATHY", "DOROTHY": "DOT",
+        "WILLIAM": "BILL",
+        "ROBERT": "BOB",
+        "RICHARD": "DICK",
+        "JAMES": "JIM",
+        "JOHN": "JACK",
+        "MICHAEL": "MIKE",
+        "DAVID": "DAVE",
+        "JOSEPH": "JOE",
+        "THOMAS": "TOM",
+        "CHARLES": "CHUCK",
+        "CHRISTOPHER": "CHRIS",
+        "DANIEL": "DAN",
+        "MATTHEW": "MATT",
+        "ANTHONY": "TONY",
+        "DONALD": "DON",
+        "KENNETH": "KEN",
+        "STEVEN": "STEVE",
+        "EDWARD": "ED",
+        "TIMOTHY": "TIM",
+        "JEFFREY": "JEFF",
+        "NICHOLAS": "NICK",
+        "JONATHAN": "JON",
+        "BENJAMIN": "BEN",
+        "SAMUEL": "SAM",
+        "ALEXANDER": "ALEX",
+        "ANDREW": "ANDY",
+        "JOSHUA": "JOSH",
+        "ELIZABETH": "LIZ",
+        "PATRICIA": "PAT",
+        "JENNIFER": "JENNY",
+        "LINDA": "LYNN",
+        "BARBARA": "BARB",
+        "SUSAN": "SUE",
+        "JESSICA": "JESS",
+        "MARGARET": "PEGGY",
+        "SARAH": "SALLY",
+        "KIMBERLY": "KIM",
+        "DEBORAH": "DEB",
+        "REBECCA": "BECKY",
+        "STEPHANIE": "STEPH",
+        "CATHERINE": "CATHY",
+        "CHRISTINE": "CHRIS",
+        "SAMANTHA": "SAM",
+        "AMANDA": "MANDY",
+        "MELISSA": "MEL",
+        "MICHELLE": "SHELLY",
+        "KATHLEEN": "KATHY",
+        "DOROTHY": "DOT",
     }
 
     def get_applicable_fields(self) -> List[str]:
@@ -42,7 +75,7 @@ class NicknameSubstitution(BaseError):
         name_upper = str(value).upper().strip()
 
         # Numbers already stripped at CSV load time, but keep this line for safety
-        name_clean = re.sub(r'\d+', '', name_upper).strip()
+        name_clean = re.sub(r"\d+", "", name_upper).strip()
 
         if name_clean in self.NICKNAME_MAP:
             return self.NICKNAME_MAP[name_clean]
@@ -78,7 +111,7 @@ class NameTypo(BaseError):
             # Random character
             new_char = self._select_random_character(exclude=name[pos])
 
-        return name[:pos] + new_char + name[pos+1:]
+        return name[:pos] + new_char + name[pos + 1 :]
 
 
 class AddressAbbreviation(BaseError):
@@ -136,10 +169,13 @@ class ApartmentFormatVariation(BaseError):
     """Vary apartment/unit format (Apt 5 vs Unit 5 vs #5)."""
 
     APT_PATTERNS = [
-        (r'APT\.?\s*(\d+)', ['APARTMENT {}', 'APT {}', 'APT. {}', 'UNIT {}', '#{}', 'NO. {}']),
-        (r'APARTMENT\s*(\d+)', ['APT {}', 'APT. {}', 'UNIT {}', '#{}', 'NO. {}']),
-        (r'UNIT\s*(\d+)', ['APT {}', 'APT. {}', 'APARTMENT {}', '#{}', 'NO. {}']),
-        (r'#(\d+)', ['APT {}', 'APT. {}', 'UNIT {}', 'APARTMENT {}', 'NO. {}']),
+        (
+            r"APT\.?\s*(\d+)",
+            ["APARTMENT {}", "APT {}", "APT. {}", "UNIT {}", "#{}", "NO. {}"],
+        ),
+        (r"APARTMENT\s*(\d+)", ["APT {}", "APT. {}", "UNIT {}", "#{}", "NO. {}"]),
+        (r"UNIT\s*(\d+)", ["APT {}", "APT. {}", "APARTMENT {}", "#{}", "NO. {}"]),
+        (r"#(\d+)", ["APT {}", "APT. {}", "UNIT {}", "APARTMENT {}", "NO. {}"]),
     ]
 
     def get_applicable_fields(self) -> List[str]:
@@ -178,22 +214,22 @@ class DateOffByOne(BaseError):
             return value
 
         # Value should be a datetime object (parsed by csv_handler)
-        if not hasattr(value, 'year'):
+        if not hasattr(value, "year"):
             return value
 
         # Choose which component to modify
-        choice = self.rng.choice(['day', 'month', 'year'])
+        choice = self.rng.choice(["day", "month", "year"])
 
         try:
-            if choice == 'day':
+            if choice == "day":
                 # Off by 1 day
                 delta = timedelta(days=int(self.rng.choice([-1, 1])))
                 return value + delta
-            elif choice == 'month':
+            elif choice == "month":
                 # Off by 1 month (approximate with 30 days)
                 delta = timedelta(days=int(self.rng.choice([-30, 30])))
                 return value + delta
-            elif choice == 'year':
+            elif choice == "year":
                 # Off by 1 year
                 delta = timedelta(days=int(self.rng.choice([-365, 365])))
                 return value + delta

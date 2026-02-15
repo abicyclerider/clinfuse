@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install mypy pandas-stubs types-PyYAML types-python-dateutil
+      - run: mypy shared/ augmentation/ entity-resolution/src/
+
+  test-augmentation:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r augmentation/requirements.txt
+      - run: pytest augmentation/tests -m "not slow"
+
+  test-entity-resolution:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r entity-resolution/requirements.txt
+      - run: pytest entity-resolution/tests
+
+  docker-build-light:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: synthea
+            dockerfile: synthea-runner/synthea-docker/Dockerfile
+            context: synthea-runner/synthea-docker
+          - name: augmentation
+            dockerfile: augmentation/Dockerfile
+            context: augmentation
+          - name: entity-resolution
+            dockerfile: entity-resolution/Dockerfile
+            context: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  docker-build-and-push-gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: fine-tuning
+          file: fine-tuning/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/abicyclerider/medgemma-pipeline:latest
+            ghcr.io/abicyclerider/medgemma-pipeline:sha-${{ github.sha }}
+          cache-from: type=gha,scope=medgemma-pipeline
+          cache-to: type=gha,mode=max,scope=medgemma-pipeline
+
+  dvc-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install dvc pyyaml
+      - run: dvc dag
+      - run: python -c "import yaml; yaml.safe_load(open('params.yaml'))"

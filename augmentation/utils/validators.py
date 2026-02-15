@@ -1,7 +1,9 @@
 """Data integrity validation utilities."""
 
 from typing import Dict, List, Tuple
+
 import pandas as pd
+
 from .csv_handler import CSVHandler
 
 
@@ -13,8 +15,7 @@ class DataValidator:
         self.csv_handler = CSVHandler()
 
     def validate_facility_csvs(
-        self,
-        facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_csvs: Dict[str, pd.DataFrame]
     ) -> Tuple[bool, List[str]]:
         """
         Validate a facility's CSV files for referential integrity.
@@ -42,8 +43,7 @@ class DataValidator:
         return len(errors) == 0, errors
 
     def _validate_patient_references(
-        self,
-        facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_csvs: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate all PATIENT foreign keys resolve."""
         errors = []
@@ -54,7 +54,10 @@ class DataValidator:
         patient_ids = set(facility_csvs["patients.csv"]["Id"].values)
 
         # Check encounters
-        if "encounters.csv" in facility_csvs and len(facility_csvs["encounters.csv"]) > 0:
+        if (
+            "encounters.csv" in facility_csvs
+            and len(facility_csvs["encounters.csv"]) > 0
+        ):
             encounter_patients = set(facility_csvs["encounters.csv"]["PATIENT"].values)
             invalid = encounter_patients - patient_ids
             if invalid:
@@ -63,8 +66,13 @@ class DataValidator:
                 )
 
         # Check payer_transitions
-        if "payer_transitions.csv" in facility_csvs and len(facility_csvs["payer_transitions.csv"]) > 0:
-            transition_patients = set(facility_csvs["payer_transitions.csv"]["PATIENT"].values)
+        if (
+            "payer_transitions.csv" in facility_csvs
+            and len(facility_csvs["payer_transitions.csv"]) > 0
+        ):
+            transition_patients = set(
+                facility_csvs["payer_transitions.csv"]["PATIENT"].values
+            )
             invalid = transition_patients - patient_ids
             if invalid:
                 errors.append(
@@ -74,8 +82,7 @@ class DataValidator:
         return errors
 
     def _validate_encounter_references(
-        self,
-        facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_csvs: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate all ENCOUNTER foreign keys resolve."""
         errors = []
@@ -109,8 +116,7 @@ class DataValidator:
         return errors
 
     def _validate_claims_references(
-        self,
-        facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_csvs: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate claims_transactions references to claims."""
         errors = []
@@ -126,7 +132,9 @@ class DataValidator:
             return errors
 
         claim_ids = set(facility_csvs["claims.csv"]["Id"].values)
-        transaction_claims = set(facility_csvs["claims_transactions.csv"]["CLAIMID"].values)
+        transaction_claims = set(
+            facility_csvs["claims_transactions.csv"]["CLAIMID"].values
+        )
 
         invalid = transaction_claims - claim_ids
         if invalid:
@@ -137,8 +145,7 @@ class DataValidator:
         return errors
 
     def _validate_non_empty_tables(
-        self,
-        facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_csvs: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate that critical tables are not empty."""
         errors = []

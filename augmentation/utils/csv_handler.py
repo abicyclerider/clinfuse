@@ -1,9 +1,10 @@
 """CSV reading and writing utilities."""
 
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
+
 import pandas as pd
-import re
 
 
 class CSVHandler:
@@ -158,6 +159,11 @@ class CSVHandler:
             output_path = facility_dir / filename
             cls.write_csv(df, output_path)
 
+            # Also write Parquet for faster downstream reads
+            parquet_path = output_path.with_suffix(".parquet")
+            parquet_path.parent.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(parquet_path, index=False)
+
     @classmethod
     def get_patient_ids(cls, df: pd.DataFrame, table_name: str) -> pd.Series:
         """
@@ -223,11 +229,11 @@ class CSVHandler:
             if field in df.columns:
                 # Remove all digits, preserving original case and spacing
                 df[field] = df[field].apply(
-                    lambda x: re.sub(r'\d+', '', str(x)) if pd.notna(x) else x
+                    lambda x: re.sub(r"\d+", "", str(x)) if pd.notna(x) else x
                 )
                 # Clean up any extra whitespace created by digit removal
                 df[field] = df[field].apply(
-                    lambda x: ' '.join(str(x).split()) if pd.notna(x) else x
+                    lambda x: " ".join(str(x).split()) if pd.notna(x) else x
                 )
 
         return df

@@ -1,14 +1,26 @@
 """Integration tests for the full augmentation pipeline."""
 
-import pytest
-from pathlib import Path
-import tempfile
 import shutil
-from augmentation.config import AugmentationConfig, PathConfig, FacilityDistributionConfig, ErrorInjectionConfig
-from augmentation.core import FacilityAssigner, CSVSplitter, ErrorInjector, GroundTruthTracker
+import tempfile
+from pathlib import Path
+
+import pytest
+
+from augmentation.config import (
+    AugmentationConfig,
+    ErrorInjectionConfig,
+    FacilityDistributionConfig,
+    PathConfig,
+)
+from augmentation.core import (
+    CSVSplitter,
+    ErrorInjector,
+    FacilityAssigner,
+    GroundTruthTracker,
+)
 from augmentation.generators import FacilityGenerator
-from augmentation.utils import CSVHandler, DataValidator
 from augmentation.tests.fixtures.sample_data import create_sample_synthea_csvs
+from augmentation.utils import CSVHandler, DataValidator
 
 
 class TestAugmentationPipeline:
@@ -58,15 +70,17 @@ class TestAugmentationPipeline:
         facility_generator = FacilityGenerator(random_seed=42)
         facilities_df = facility_generator.generate_facilities(
             config.facility_distribution.num_facilities,
-            sample_csvs["organizations.csv"]
+            sample_csvs["organizations.csv"],
         )
 
         assert len(facilities_df) == 3
 
         # Step 2: Assign patients to facilities
-        facility_assigner = FacilityAssigner(config.facility_distribution, random_seed=42)
-        patient_facilities, encounter_facilities = facility_assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        facility_assigner = FacilityAssigner(
+            config.facility_distribution, random_seed=42
+        )
+        patient_facilities, encounter_facilities = (
+            facility_assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         assert len(patient_facilities) == 10
@@ -75,9 +89,7 @@ class TestAugmentationPipeline:
         # Step 3: Split CSVs by facility
         csv_splitter = CSVSplitter()
         facility_csvs = csv_splitter.split_csvs_by_facility(
-            sample_csvs,
-            patient_facilities,
-            encounter_facilities
+            sample_csvs, patient_facilities, encounter_facilities
         )
 
         # Should have 3 facilities
@@ -96,8 +108,7 @@ class TestAugmentationPipeline:
 
         for facility_id, csvs in facility_csvs.items():
             errored_patients_df, error_log = error_injector.inject_errors_into_patients(
-                csvs["patients.csv"],
-                facility_id
+                csvs["patients.csv"], facility_id
             )
 
             facility_csvs[facility_id]["patients.csv"] = errored_patients_df
@@ -105,15 +116,23 @@ class TestAugmentationPipeline:
             # Track ground truth
             for _, patient in errored_patients_df.iterrows():
                 patient_uuid = patient["Id"]
-                num_encounters = len(csvs["encounters.csv"][csvs["encounters.csv"]["PATIENT"] == patient_uuid])
-                patient_errors = [err["error_type"] for err in error_log if err["patient_uuid"] == patient_uuid]
+                num_encounters = len(
+                    csvs["encounters.csv"][
+                        csvs["encounters.csv"]["PATIENT"] == patient_uuid
+                    ]
+                )
+                patient_errors = [
+                    err["error_type"]
+                    for err in error_log
+                    if err["patient_uuid"] == patient_uuid
+                ]
 
                 ground_truth_tracker.add_patient_facility_mapping(
                     patient_uuid,
                     facility_id,
                     num_encounters,
                     patient.to_dict(),
-                    patient_errors
+                    patient_errors,
                 )
 
             ground_truth_tracker.add_error_records(error_log)
@@ -130,7 +149,9 @@ class TestAugmentationPipeline:
         output_dir = temp_dir / "output"
 
         for facility_id, csvs in facility_csvs.items():
-            csv_handler.write_facility_csvs(csvs, output_dir / "facilities", facility_id)
+            csv_handler.write_facility_csvs(
+                csvs, output_dir / "facilities", facility_id
+            )
 
         # Verify output files exist
         for facility_id in range(1, 4):
@@ -157,16 +178,16 @@ class TestAugmentationPipeline:
         encounters_df = sample_csvs["encounters.csv"]
 
         # Run through pipeline
-        facility_assigner = FacilityAssigner(config.facility_distribution, random_seed=42)
-        patient_facilities, encounter_facilities = facility_assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        facility_assigner = FacilityAssigner(
+            config.facility_distribution, random_seed=42
+        )
+        patient_facilities, encounter_facilities = (
+            facility_assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         csv_splitter = CSVSplitter()
         facility_csvs = csv_splitter.split_csvs_by_facility(
-            sample_csvs,
-            patient_facilities,
-            encounter_facilities
+            sample_csvs, patient_facilities, encounter_facilities
         )
 
         # Validate each facility
@@ -174,7 +195,9 @@ class TestAugmentationPipeline:
 
         for facility_id, csvs in facility_csvs.items():
             is_valid, errors = validator.validate_facility_csvs(csvs)
-            assert is_valid, f"Facility {facility_id} has referential integrity issues: {errors}"
+            assert is_valid, (
+                f"Facility {facility_id} has referential integrity issues: {errors}"
+            )
 
             # Manually check key relationships
             patient_ids = set(csvs["patients.csv"]["Id"].values)
@@ -197,16 +220,16 @@ class TestAugmentationPipeline:
         # Force all patients to 2 facilities
         config.facility_distribution.facility_count_weights = {1: 0.0, 2: 1.0}
 
-        facility_assigner = FacilityAssigner(config.facility_distribution, random_seed=42)
-        patient_facilities, encounter_facilities = facility_assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        facility_assigner = FacilityAssigner(
+            config.facility_distribution, random_seed=42
+        )
+        patient_facilities, encounter_facilities = (
+            facility_assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         csv_splitter = CSVSplitter()
         facility_csvs = csv_splitter.split_csvs_by_facility(
-            sample_csvs,
-            patient_facilities,
-            encounter_facilities
+            sample_csvs, patient_facilities, encounter_facilities
         )
 
         # Each patient should appear in exactly 2 facilities
@@ -223,16 +246,16 @@ class TestAugmentationPipeline:
         patients_df = sample_csvs["patients.csv"]
         encounters_df = sample_csvs["encounters.csv"]
 
-        facility_assigner = FacilityAssigner(config.facility_distribution, random_seed=42)
-        patient_facilities, encounter_facilities = facility_assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        facility_assigner = FacilityAssigner(
+            config.facility_distribution, random_seed=42
+        )
+        patient_facilities, encounter_facilities = (
+            facility_assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         csv_splitter = CSVSplitter()
         facility_csvs = csv_splitter.split_csvs_by_facility(
-            sample_csvs,
-            patient_facilities,
-            encounter_facilities
+            sample_csvs, patient_facilities, encounter_facilities
         )
 
         # Apply errors
@@ -240,8 +263,7 @@ class TestAugmentationPipeline:
 
         for facility_id, csvs in facility_csvs.items():
             errored_patients_df, _ = error_injector.inject_errors_into_patients(
-                csvs["patients.csv"],
-                facility_id
+                csvs["patients.csv"], facility_id
             )
             facility_csvs[facility_id]["patients.csv"] = errored_patients_df
 
@@ -254,7 +276,9 @@ class TestAugmentationPipeline:
             facility_records = []
             for facility_id in facilities:
                 facility_patients = facility_csvs[facility_id]["patients.csv"]
-                patient_record = facility_patients[facility_patients["Id"] == patient_uuid]
+                patient_record = facility_patients[
+                    facility_patients["Id"] == patient_uuid
+                ]
                 if len(patient_record) > 0:
                     facility_records.append(patient_record.iloc[0])
 

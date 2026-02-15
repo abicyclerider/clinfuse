@@ -2,26 +2,26 @@
 
 from .base_error import BaseError
 from .demographic_errors import (
-    NicknameSubstitution,
-    NameTypo,
     AddressAbbreviation,
     ApartmentFormatVariation,
     DateOffByOne,
     MaidenNameUsage,
-)
-from .identifier_errors import (
-    SSNTransposition,
-    SSNDigitError,
-    SSNFormatVariation,
-    DriversLicenseError,
-    PassportError,
+    NameTypo,
+    NicknameSubstitution,
 )
 from .formatting_errors import (
     CapitalizationError,
     ExtraWhitespace,
-    MissingWhitespace,
     LeadingTrailingWhitespace,
+    MissingWhitespace,
     SpecialCharacterVariation,
+)
+from .identifier_errors import (
+    DriversLicenseError,
+    PassportError,
+    SSNDigitError,
+    SSNFormatVariation,
+    SSNTransposition,
 )
 
 __all__ = [

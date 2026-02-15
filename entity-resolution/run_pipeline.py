@@ -7,34 +7,34 @@ Usage:
     python run_pipeline.py --config config/matching_config.yaml --output-dir output/ --verbose
 """
 
-import click
 import sys
 from pathlib import Path
+
+import click
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.pipeline import run_entity_resolution_pipeline, load_config, get_pipeline_summary
+from src.pipeline import (
+    load_config,
+    run_entity_resolution_pipeline,
+)
 
 
 @click.command()
 @click.option(
-    '--config',
-    default='config/matching_config.yaml',
-    help='Path to configuration YAML file',
-    type=click.Path(exists=True)
+    "--config",
+    default="config/matching_config.yaml",
+    help="Path to configuration YAML file",
+    type=click.Path(exists=True),
 )
 @click.option(
-    '--output-dir',
-    default='output/',
-    help='Output directory for results',
-    type=click.Path()
+    "--output-dir",
+    default="output/",
+    help="Output directory for results",
+    type=click.Path(),
 )
-@click.option(
-    '--verbose',
-    is_flag=True,
-    help='Enable verbose logging'
-)
+@click.option("--verbose", is_flag=True, help="Enable verbose logging")
 def main(config, output_dir, verbose):
     """
     Run entity resolution pipeline on augmented patient data.
@@ -48,9 +48,7 @@ def main(config, output_dir, verbose):
 
         # Run pipeline
         results = run_entity_resolution_pipeline(
-            config_dict,
-            output_dir=output_dir,
-            verbose=verbose
+            config_dict, output_dir=output_dir, verbose=verbose
         )
 
         # Print summary
@@ -72,9 +70,10 @@ def main(config, output_dir, verbose):
         print(f"\nError: {e}", file=sys.stderr)
         if verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,9 +1,9 @@
 """Unit tests for error injection logic."""
 
 import pytest
-import pandas as pd
-from augmentation.core import ErrorInjector
+
 from augmentation.config import ErrorInjectionConfig
+from augmentation.core import ErrorInjector
 from augmentation.tests.fixtures.sample_data import create_sample_patients
 
 
@@ -18,9 +18,13 @@ class TestErrorInjector:
         )
         injector = ErrorInjector(config, random_seed=42)
 
-        patients_df = create_sample_patients(100)  # Large sample for statistical validity
+        patients_df = create_sample_patients(
+            100
+        )  # Large sample for statistical validity
 
-        errored_df, error_log = injector.inject_errors_into_patients(patients_df, facility_id=1)
+        errored_df, error_log = injector.inject_errors_into_patients(
+            patients_df, facility_id=1
+        )
 
         # Count unique patients with errors
         patients_with_errors = len(set(err["patient_uuid"] for err in error_log))
@@ -85,7 +89,9 @@ class TestErrorInjector:
             errors_by_patient[patient_uuid] = errors_by_patient.get(patient_uuid, 0) + 1
 
         # At least some patients should have multiple errors
-        patients_with_multiple = sum(1 for count in errors_by_patient.values() if count > 1)
+        patients_with_multiple = sum(
+            1 for count in errors_by_patient.values() if count > 1
+        )
         assert patients_with_multiple > 0
 
     def test_error_types_follow_weights(self):
@@ -99,7 +105,7 @@ class TestErrorInjector:
                 "date_variation": 0.0,
                 "ssn_error": 0.0,
                 "formatting_error": 0.0,
-            }
+            },
         )
         injector = ErrorInjector(config, random_seed=42)
 
@@ -118,7 +124,15 @@ class TestErrorInjector:
             # Error types should be from name_variation or address_error categories
             assert any(
                 substr in error_type.lower()
-                for substr in ["name", "address", "nickname", "maiden", "typo", "abbreviation", "apartment"]
+                for substr in [
+                    "name",
+                    "address",
+                    "nickname",
+                    "maiden",
+                    "typo",
+                    "abbreviation",
+                    "apartment",
+                ]
             )
 
     def test_get_error_statistics(self):
@@ -148,8 +162,12 @@ class TestErrorInjector:
 
         patients_df = create_sample_patients(5)
 
-        _, error_log_f1 = injector.inject_errors_into_patients(patients_df.copy(), facility_id=1)
-        _, error_log_f2 = injector.inject_errors_into_patients(patients_df.copy(), facility_id=2)
+        _, error_log_f1 = injector.inject_errors_into_patients(
+            patients_df.copy(), facility_id=1
+        )
+        _, error_log_f2 = injector.inject_errors_into_patients(
+            patients_df.copy(), facility_id=2
+        )
 
         # Same patient should potentially have different errors at different facilities
         # (due to different random seeds per facility)

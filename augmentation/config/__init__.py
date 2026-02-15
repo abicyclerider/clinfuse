@@ -2,8 +2,8 @@
 
 from .config_schema import (
     AugmentationConfig,
-    FacilityDistributionConfig,
     ErrorInjectionConfig,
+    FacilityDistributionConfig,
     PathConfig,
 )
 

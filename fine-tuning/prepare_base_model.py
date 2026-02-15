@@ -90,12 +90,19 @@ def main():
     parser = argparse.ArgumentParser(
         description="Extract text-only base model from multimodal MedGemma 4B"
     )
-    parser.add_argument("--no-push", action="store_true",
-                        help="Skip pushing to HF Hub")
-    parser.add_argument("--local-dir", type=str, default="./text-only-base",
-                        help="Local directory to save the model")
-    parser.add_argument("--output-repo", type=str, default=OUTPUT_REPO,
-                        help=f"HF Hub repo to push to (default: {OUTPUT_REPO})")
+    parser.add_argument("--no-push", action="store_true", help="Skip pushing to HF Hub")
+    parser.add_argument(
+        "--local-dir",
+        type=str,
+        default="./text-only-base",
+        help="Local directory to save the model",
+    )
+    parser.add_argument(
+        "--output-repo",
+        type=str,
+        default=OUTPUT_REPO,
+        help=f"HF Hub repo to push to (default: {OUTPUT_REPO})",
+    )
     args = parser.parse_args()
 
     text_model, tokenizer = extract_text_model(SOURCE_MODEL_ID)
@@ -109,6 +116,7 @@ def main():
     # Verify it loads cleanly via Auto class
     print("\nVerifying Auto class loading...")
     from transformers import AutoModelForSequenceClassification
+
     reloaded = AutoModelForSequenceClassification.from_pretrained(
         args.local_dir,
         torch_dtype=torch.bfloat16,

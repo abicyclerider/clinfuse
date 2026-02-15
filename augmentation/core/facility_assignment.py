@@ -1,8 +1,10 @@
 """Facility assignment logic for patients and encounters."""
 
 from typing import Dict, List, Tuple
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+
 from ..config import FacilityDistributionConfig
 
 
@@ -54,8 +56,7 @@ class FacilityAssigner:
 
             # Step 1: Determine number of facilities for this patient
             num_facilities = self.rng.choice(
-                self.facility_counts,
-                p=self.facility_count_probabilities
+                self.facility_counts, p=self.facility_count_probabilities
             )
 
             # Handle case where patient needs more facilities than configured max
@@ -67,7 +68,7 @@ class FacilityAssigner:
             assigned_facilities = self.rng.choice(
                 range(1, self.config.num_facilities + 1),
                 size=num_facilities,
-                replace=False
+                replace=False,
             ).tolist()
 
             # Primary facility is first in list
@@ -86,8 +87,7 @@ class FacilityAssigner:
 
             # Step 5: Distribute encounters across facilities
             encounter_distribution = self._distribute_encounters_chronologically(
-                patient_encounters["Id"].tolist(),
-                assigned_facilities
+                patient_encounters["Id"].tolist(), assigned_facilities
             )
 
             # Add to master mapping
@@ -96,9 +96,7 @@ class FacilityAssigner:
         return patient_facilities, encounter_facilities
 
     def _distribute_encounters_chronologically(
-        self,
-        encounter_ids: List[str],
-        assigned_facilities: List[int]
+        self, encounter_ids: List[str], assigned_facilities: List[int]
     ) -> Dict[str, int]:
         """
         Distribute encounters across facilities with chronological switching pattern.
@@ -159,13 +157,16 @@ class FacilityAssigner:
         facility_count_distribution = {}
         for facilities in patient_facilities.values():
             count = len(facilities)
-            facility_count_distribution[count] = facility_count_distribution.get(count, 0) + 1
+            facility_count_distribution[count] = (
+                facility_count_distribution.get(count, 0) + 1
+            )
 
         # Count encounters per facility
         encounter_count_per_facility = {}
         for facility_id in encounter_facilities.values():
-            encounter_count_per_facility[facility_id] = \
+            encounter_count_per_facility[facility_id] = (
                 encounter_count_per_facility.get(facility_id, 0) + 1
+            )
 
         # Count unique patients per facility
         patient_count_per_facility = {}

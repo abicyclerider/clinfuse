@@ -1,10 +1,13 @@
 """Unit tests for facility assignment logic."""
 
 import pytest
-import pandas as pd
-from augmentation.core import FacilityAssigner
+
 from augmentation.config import FacilityDistributionConfig
-from augmentation.tests.fixtures.sample_data import create_sample_patients, create_sample_encounters
+from augmentation.core import FacilityAssigner
+from augmentation.tests.fixtures.sample_data import (
+    create_sample_encounters,
+    create_sample_patients,
+)
 
 
 class TestFacilityAssigner:
@@ -18,8 +21,8 @@ class TestFacilityAssigner:
         patients_df = create_sample_patients(10)
         encounters_df = create_sample_encounters(patients_df, 5)
 
-        patient_facilities, encounter_facilities = assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        patient_facilities, encounter_facilities = (
+            assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         # All patients should be assigned
@@ -38,8 +41,8 @@ class TestFacilityAssigner:
         patients_df = create_sample_patients(10)
         encounters_df = create_sample_encounters(patients_df, 5)
 
-        patient_facilities, encounter_facilities = assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        patient_facilities, encounter_facilities = (
+            assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         # All encounters should be assigned
@@ -59,7 +62,7 @@ class TestFacilityAssigner:
                 3: 0.15,
                 4: 0.10,
                 5: 0.05,
-            }
+            },
         )
         assigner = FacilityAssigner(config, random_seed=42)
 
@@ -86,16 +89,21 @@ class TestFacilityAssigner:
         """Test that primary facility receives ~60% of encounters for multi-facility patients."""
         config = FacilityDistributionConfig(
             num_facilities=5,
-            facility_count_weights={1: 0.0, 2: 1.0},  # Force all patients to 2 facilities
+            facility_count_weights={
+                1: 0.0,
+                2: 1.0,
+            },  # Force all patients to 2 facilities
             primary_facility_weight=0.60,
         )
         assigner = FacilityAssigner(config, random_seed=42)
 
         patients_df = create_sample_patients(10)
-        encounters_df = create_sample_encounters(patients_df, 100)  # Many encounters per patient
+        encounters_df = create_sample_encounters(
+            patients_df, 100
+        )  # Many encounters per patient
 
-        patient_facilities, encounter_facilities = assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        patient_facilities, encounter_facilities = (
+            assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         # For each patient, check primary facility has ~60% of encounters
@@ -108,7 +116,8 @@ class TestFacilityAssigner:
 
             # Count encounters at primary facility
             primary_count = sum(
-                1 for enc_id in patient_encounters["Id"]
+                1
+                for enc_id in patient_encounters["Id"]
                 if encounter_facilities[enc_id] == primary_facility
             )
 
@@ -128,8 +137,8 @@ class TestFacilityAssigner:
         patients_df = create_sample_patients(5)
         encounters_df = create_sample_encounters(patients_df, 20)
 
-        patient_facilities, encounter_facilities = assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        patient_facilities, encounter_facilities = (
+            assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
         # For each patient, verify temporal pattern
@@ -138,9 +147,10 @@ class TestFacilityAssigner:
                 continue
 
             primary_facility = facilities[0]
-            secondary_facility = facilities[1]
 
-            patient_encounters = encounters_df[encounters_df["PATIENT"] == patient_uuid].sort_values("START")
+            patient_encounters = encounters_df[
+                encounters_df["PATIENT"] == patient_uuid
+            ].sort_values("START")
 
             # Get timestamps of primary and secondary encounters
             primary_dates = []
@@ -157,6 +167,7 @@ class TestFacilityAssigner:
             if primary_dates and secondary_dates:
                 # Convert to timestamps for median calculation
                 import statistics
+
                 primary_timestamps = [d.timestamp() for d in primary_dates]
                 secondary_timestamps = [d.timestamp() for d in secondary_dates]
 
@@ -175,11 +186,13 @@ class TestFacilityAssigner:
         patients_df = create_sample_patients(10)
         encounters_df = create_sample_encounters(patients_df, 5)
 
-        patient_facilities, encounter_facilities = assigner.assign_patients_to_facilities(
-            patients_df, encounters_df
+        patient_facilities, encounter_facilities = (
+            assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
-        stats = assigner.get_facility_statistics(patient_facilities, encounter_facilities)
+        stats = assigner.get_facility_statistics(
+            patient_facilities, encounter_facilities
+        )
 
         # Validate stats structure
         assert stats["total_patients"] == 10

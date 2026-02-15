@@ -1,9 +1,9 @@
 """Generate synthetic facility metadata."""
 
-from typing import List, Dict
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 from faker import Faker
 
 
@@ -56,22 +56,26 @@ class FacilityGenerator:
 
         for facility_id in range(1, num_facilities + 1):
             # Sample a random organization for geographic location
-            org = organizations_df.sample(n=1, random_state=self.rng.integers(0, 2**31)).iloc[0]
+            org = organizations_df.sample(
+                n=1, random_state=self.rng.integers(0, 2**31)
+            ).iloc[0]
 
             # Generate facility name
             name = self._generate_facility_name()
 
-            facilities.append({
-                "facility_id": facility_id,
-                "name": name,
-                "address": org.get("ADDRESS", self.faker.street_address()),
-                "city": org.get("CITY", self.faker.city()),
-                "state": org.get("STATE", "MA"),
-                "zip": org.get("ZIP", self.faker.zipcode()),
-                "lat": org.get("LAT", self.faker.latitude()),
-                "lon": org.get("LON", self.faker.longitude()),
-                "type": self._select_facility_type(),
-            })
+            facilities.append(
+                {
+                    "facility_id": facility_id,
+                    "name": name,
+                    "address": org.get("ADDRESS", self.faker.street_address()),
+                    "city": org.get("CITY", self.faker.city()),
+                    "state": org.get("STATE", "MA"),
+                    "zip": org.get("ZIP", self.faker.zipcode()),
+                    "lat": org.get("LAT", self.faker.latitude()),
+                    "lon": org.get("LON", self.faker.longitude()),
+                    "type": self._select_facility_type(),
+                }
+            )
 
         return pd.DataFrame(facilities)
 

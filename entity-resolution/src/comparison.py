@@ -4,16 +4,17 @@ Field-by-field comparison for candidate record pairs.
 Calculates similarity scores using appropriate methods for each field type.
 """
 
+import logging
+
 import pandas as pd
 import recordlinkage as rl
-from recordlinkage.compare import String, Exact, Date
-import logging
 
 logger = logging.getLogger(__name__)
 
 
-def build_comparison_features(pairs: pd.MultiIndex, df: pd.DataFrame,
-                              config: dict) -> pd.DataFrame:
+def build_comparison_features(
+    pairs: pd.MultiIndex, df: pd.DataFrame, config: dict
+) -> pd.DataFrame:
     """
     Calculate similarity scores for all candidate pairs.
 
@@ -26,10 +27,10 @@ def build_comparison_features(pairs: pd.MultiIndex, df: pd.DataFrame,
         DataFrame with similarity scores for each field
     """
     # Ensure record_id is the index
-    if 'record_id' in df.columns and df.index.name != 'record_id':
-        df = df.set_index('record_id')
+    if "record_id" in df.columns and df.index.name != "record_id":
+        df = df.set_index("record_id")
 
-    comp_config = config.get('comparison', {})
+    comp_config = config.get("comparison", {})
 
     # Create custom comparator
     compare = create_custom_comparator(comp_config)
@@ -66,40 +67,45 @@ def create_custom_comparator(config: dict) -> rl.Compare:
     compare = rl.Compare()
 
     # 1. First name: Jaro-Winkler similarity (no threshold — continuous score)
-    compare.string('first_name', 'first_name', method='jarowinkler', label='first_name_sim')
+    compare.string(
+        "first_name", "first_name", method="jarowinkler", label="first_name_sim"
+    )
 
     # 2. Last name: Jaro-Winkler similarity
-    compare.string('last_name', 'last_name', method='jarowinkler', label='last_name_sim')
+    compare.string(
+        "last_name", "last_name", method="jarowinkler", label="last_name_sim"
+    )
 
     # 3. Address: Jaro-Winkler similarity
-    compare.string('address', 'address', method='jarowinkler', label='address_sim')
+    compare.string("address", "address", method="jarowinkler", label="address_sim")
 
     # 4. City: Jaro-Winkler similarity
-    compare.string('city', 'city', method='jarowinkler', label='city_sim')
+    compare.string("city", "city", method="jarowinkler", label="city_sim")
 
     # 5. State: Exact match
-    compare.exact('state', 'state', label='state_match')
+    compare.exact("state", "state", label="state_match")
 
     # 6. ZIP: Exact match
-    compare.exact('zip', 'zip', label='zip_match')
+    compare.exact("zip", "zip", label="zip_match")
 
     # 7. SSN: Exact match (default) or fuzzy Levenshtein
-    if config.get('ssn_fuzzy', False):
-        compare.string('ssn', 'ssn', method='levenshtein', label='ssn_match')
+    if config.get("ssn_fuzzy", False):
+        compare.string("ssn", "ssn", method="levenshtein", label="ssn_match")
     else:
-        compare.exact('ssn', 'ssn', label='ssn_match')
+        compare.exact("ssn", "ssn", label="ssn_match")
 
     # 8. Birthdate: Exact match (default) or fuzzy date comparison
-    if config.get('birthdate_fuzzy', False):
-        compare.date('birthdate', 'birthdate', label='birthdate_match')
+    if config.get("birthdate_fuzzy", False):
+        compare.date("birthdate", "birthdate", label="birthdate_match")
     else:
-        compare.exact('birthdate', 'birthdate', label='birthdate_match')
+        compare.exact("birthdate", "birthdate", label="birthdate_match")
 
     return compare
 
 
-def calculate_custom_similarity(df1: pd.DataFrame, df2: pd.DataFrame,
-                                field: str, method: str = 'jarowinkler') -> pd.Series:
+def calculate_custom_similarity(
+    df1: pd.DataFrame, df2: pd.DataFrame, field: str, method: str = "jarowinkler"
+) -> pd.Series:
     """
     Calculate custom similarity scores for a specific field.
 
@@ -112,20 +118,30 @@ def calculate_custom_similarity(df1: pd.DataFrame, df2: pd.DataFrame,
     Returns:
         Series of similarity scores
     """
-    if method == 'jarowinkler':
+    if method == "jarowinkler":
         from jellyfish import jaro_winkler_similarity
-        return df1[field].combine(df2[field], lambda a, b: jaro_winkler_similarity(str(a), str(b)))
 
-    elif method == 'levenshtein':
+        return df1[field].combine(
+            df2[field], lambda a, b: jaro_winkler_similarity(str(a), str(b))
+        )
+
+    elif method == "levenshtein":
         from Levenshtein import distance as levenshtein_distance
-        return df1[field].combine(df2[field], lambda a, b: 1 - levenshtein_distance(str(a), str(b)) / max(len(str(a)), len(str(b))))
+
+        return df1[field].combine(
+            df2[field],
+            lambda a, b: (
+                1 - levenshtein_distance(str(a), str(b)) / max(len(str(a)), len(str(b)))
+            ),
+        )
 
     else:
         raise ValueError(f"Unknown similarity method: {method}")
 
 
-def analyze_similarity_distribution(features: pd.DataFrame, field: str,
-                                   true_matches: pd.Series = None) -> dict:
+def analyze_similarity_distribution(
+    features: pd.DataFrame, field: str, true_matches: pd.Series = None
+) -> dict:
     """
     Analyze the distribution of similarity scores for a field.
 
@@ -141,19 +157,19 @@ def analyze_similarity_distribution(features: pd.DataFrame, field: str,
         raise ValueError(f"Field {field} not found in features")
 
     stats = {
-        'field': field,
-        'mean': features[field].mean(),
-        'median': features[field].median(),
-        'std': features[field].std(),
-        'min': features[field].min(),
-        'max': features[field].max(),
-        'q25': features[field].quantile(0.25),
-        'q75': features[field].quantile(0.75)
+        "field": field,
+        "mean": features[field].mean(),
+        "median": features[field].median(),
+        "std": features[field].std(),
+        "min": features[field].min(),
+        "max": features[field].max(),
+        "q25": features[field].quantile(0.25),
+        "q75": features[field].quantile(0.75),
     }
 
     if true_matches is not None:
-        stats['mean_matches'] = features.loc[true_matches, field].mean()
-        stats['mean_non_matches'] = features.loc[~true_matches, field].mean()
+        stats["mean_matches"] = features.loc[true_matches, field].mean()
+        stats["mean_non_matches"] = features.loc[~true_matches, field].mean()
 
     return stats
 
@@ -171,23 +187,39 @@ def add_composite_features(features: pd.DataFrame) -> pd.DataFrame:
     features = features.copy()
 
     # Total similarity score (sum of the 8 base features only)
-    feature_cols = ['first_name_sim', 'last_name_sim', 'address_sim', 'city_sim',
-                    'state_match', 'zip_match', 'ssn_match', 'birthdate_match']
+    feature_cols = [
+        "first_name_sim",
+        "last_name_sim",
+        "address_sim",
+        "city_sim",
+        "state_match",
+        "zip_match",
+        "ssn_match",
+        "birthdate_match",
+    ]
     cols_present = [c for c in feature_cols if c in features.columns]
-    features['total_score'] = features[cols_present].sum(axis=1)
+    features["total_score"] = features[cols_present].sum(axis=1)
 
     # Name similarity (average of first, last)
-    name_cols = [c for c in ['first_name_sim', 'last_name_sim'] if c in features.columns]
+    name_cols = [
+        c for c in ["first_name_sim", "last_name_sim"] if c in features.columns
+    ]
     if name_cols:
-        features['name_score'] = features[name_cols].mean(axis=1)
+        features["name_score"] = features[name_cols].mean(axis=1)
 
     # Address similarity (average of address, city, state, zip)
-    addr_cols = [c for c in ['address_sim', 'city_sim', 'state_match', 'zip_match'] if c in features.columns]
+    addr_cols = [
+        c
+        for c in ["address_sim", "city_sim", "state_match", "zip_match"]
+        if c in features.columns
+    ]
     if addr_cols:
-        features['address_score'] = features[addr_cols].mean(axis=1)
+        features["address_score"] = features[addr_cols].mean(axis=1)
 
     # High confidence indicators
-    if 'ssn_match' in features.columns and 'birthdate_match' in features.columns:
-        features['high_confidence'] = (features['ssn_match'] == 1) & (features['birthdate_match'] == 1)
+    if "ssn_match" in features.columns and "birthdate_match" in features.columns:
+        features["high_confidence"] = (features["ssn_match"] == 1) & (
+            features["birthdate_match"] == 1
+        )
 
     return features

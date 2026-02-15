@@ -1,17 +1,25 @@
 """Error injection orchestrator."""
 
-from typing import Dict, List, Tuple, Optional, Type
-import pandas as pd
+from typing import Dict, List, Tuple
+
 import numpy as np
+import pandas as pd
+
 from ..config import ErrorInjectionConfig
-from ..errors.base_error import BaseError
 from ..errors import (
-    NicknameSubstitution, NameTypo, AddressAbbreviation,
-    ApartmentFormatVariation, DateOffByOne, MaidenNameUsage,
-    SSNTransposition, SSNDigitError, SSNFormatVariation,
-    DriversLicenseError, PassportError,
-    CapitalizationError, ExtraWhitespace, MissingWhitespace,
-    LeadingTrailingWhitespace, SpecialCharacterVariation,
+    AddressAbbreviation,
+    ApartmentFormatVariation,
+    CapitalizationError,
+    DateOffByOne,
+    ExtraWhitespace,
+    LeadingTrailingWhitespace,
+    MaidenNameUsage,
+    NameTypo,
+    NicknameSubstitution,
+    SpecialCharacterVariation,
+    SSNDigitError,
+    SSNFormatVariation,
+    SSNTransposition,
 )
 
 
@@ -187,14 +195,20 @@ class ErrorInjector:
         if errored_value != original_value:
             df.at[row_idx, field] = errored_value
 
-            error_log.append({
-                "patient_uuid": patient_uuid,
-                "facility_id": facility_id,
-                "field": field,
-                "error_type": error_instance.get_error_type_name(),
-                "original": str(original_value) if original_value is not None else None,
-                "errored": str(errored_value) if errored_value is not None else None,
-            })
+            error_log.append(
+                {
+                    "patient_uuid": patient_uuid,
+                    "facility_id": facility_id,
+                    "field": field,
+                    "error_type": error_instance.get_error_type_name(),
+                    "original": str(original_value)
+                    if original_value is not None
+                    else None,
+                    "errored": str(errored_value)
+                    if errored_value is not None
+                    else None,
+                }
+            )
 
         return error_log
 

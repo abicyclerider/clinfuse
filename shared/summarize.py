@@ -55,9 +55,10 @@ def summarize_diff_friendly_from_records(records):
         lines = ["MEDICATIONS:"]
         for desc, grp in meds_df.groupby("DESCRIPTION", sort=False):
             start_dt = pd.to_datetime(grp["START"], errors="coerce").min()
-            is_current = grp["STOP"].isna().any() | (
-                grp["STOP"].astype(str).str.strip() == ""
-            ).any()
+            is_current = (
+                grp["STOP"].isna().any()
+                | (grp["STOP"].astype(str).str.strip() == "").any()
+            )
             if is_current:
                 period = (
                     f"{start_dt.year}\u2013ongoing" if pd.notna(start_dt) else "ongoing"

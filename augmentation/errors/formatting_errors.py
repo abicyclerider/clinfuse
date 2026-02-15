@@ -1,7 +1,8 @@
 """Formatting error transformations (capitalization, whitespace)."""
 
-from typing import Any, Dict, List
 import re
+from typing import Any, Dict, List
+
 from .base_error import BaseError
 
 
@@ -21,19 +22,18 @@ class CapitalizationError(BaseError):
         text = str(value)
 
         # Choose capitalization style
-        style = self.rng.choice(['upper', 'lower', 'title', 'mixed'])
+        style = self.rng.choice(["upper", "lower", "title", "mixed"])
 
-        if style == 'upper':
+        if style == "upper":
             return text.upper()
-        elif style == 'lower':
+        elif style == "lower":
             return text.lower()
-        elif style == 'title':
+        elif style == "title":
             return text.title()
-        elif style == 'mixed':
+        elif style == "mixed":
             # Random capitalization of each character
-            return ''.join(
-                c.upper() if self.rng.random() < 0.5 else c.lower()
-                for c in text
+            return "".join(
+                c.upper() if self.rng.random() < 0.5 else c.lower() for c in text
             )
 
         return value
@@ -61,7 +61,7 @@ class ExtraWhitespace(BaseError):
 
         # Join with multiple spaces
         num_spaces = self.rng.integers(2, 5)
-        return (' ' * num_spaces).join(words)
+        return (" " * num_spaces).join(words)
 
 
 class MissingWhitespace(BaseError):
@@ -80,7 +80,7 @@ class MissingWhitespace(BaseError):
         text = str(value)
 
         # Remove all spaces
-        return re.sub(r'\s+', '', text)
+        return re.sub(r"\s+", "", text)
 
 
 class LeadingTrailingWhitespace(BaseError):
@@ -99,16 +99,16 @@ class LeadingTrailingWhitespace(BaseError):
         text = str(value)
 
         # Choose where to add whitespace
-        choice = self.rng.choice(['leading', 'trailing', 'both'])
+        choice = self.rng.choice(["leading", "trailing", "both"])
 
         num_spaces = self.rng.integers(1, 4)
-        spaces = ' ' * num_spaces
+        spaces = " " * num_spaces
 
-        if choice == 'leading':
+        if choice == "leading":
             return spaces + text
-        elif choice == 'trailing':
+        elif choice == "trailing":
             return text + spaces
-        elif choice == 'both':
+        elif choice == "both":
             return spaces + text + spaces
 
         return value
@@ -132,10 +132,10 @@ class SpecialCharacterVariation(BaseError):
         # Add or remove common special characters
         if self.rng.random() < 0.5:
             # Add period (e.g., "John" -> "John.")
-            if '.' not in text:
-                return text + '.'
+            if "." not in text:
+                return text + "."
         else:
             # Remove special characters
-            return re.sub(r'[.\-\']', '', text)
+            return re.sub(r"[.\-\']", "", text)
 
         return value

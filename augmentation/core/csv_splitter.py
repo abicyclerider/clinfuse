@@ -1,7 +1,9 @@
 """CSV splitting logic to partition data by facility."""
 
 from typing import Dict, List, Set
+
 import pandas as pd
+
 from ..utils import CSVHandler
 
 
@@ -69,13 +71,15 @@ class CSVSplitter:
 
         # Step 1: Get encounters for this facility
         facility_encounters = {
-            enc_id for enc_id, fac_id in encounter_facilities.items()
+            enc_id
+            for enc_id, fac_id in encounter_facilities.items()
             if fac_id == facility_id
         }
 
         # Step 2: Get patients who have encounters at this facility
         facility_patients = {
-            patient_uuid for patient_uuid, facilities in patient_facilities.items()
+            patient_uuid
+            for patient_uuid, facilities in patient_facilities.items()
             if facility_id in facilities
         }
 
@@ -95,31 +99,37 @@ class CSVSplitter:
 
             elif filename in self.csv_handler.ENCOUNTER_LINKED_TABLES:
                 # Encounter-linked tables: follow encounter assignment
-                facility_data[filename] = df[df["ENCOUNTER"].isin(facility_encounters)].copy()
+                facility_data[filename] = df[
+                    df["ENCOUNTER"].isin(facility_encounters)
+                ].copy()
 
             elif filename == "claims.csv":
                 # Claims: linked via APPOINTMENTID (encounter)
-                facility_data[filename] = df[df["APPOINTMENTID"].isin(facility_encounters)].copy()
+                facility_data[filename] = df[
+                    df["APPOINTMENTID"].isin(facility_encounters)
+                ].copy()
 
             elif filename == "claims_transactions.csv":
                 # Claims transactions: follow parent claims
                 if "claims.csv" in facility_data:
                     facility_claim_ids = set(facility_data["claims.csv"]["Id"].values)
-                    facility_data[filename] = df[df["CLAIMID"].isin(facility_claim_ids)].copy()
+                    facility_data[filename] = df[
+                        df["CLAIMID"].isin(facility_claim_ids)
+                    ].copy()
                 else:
                     facility_data[filename] = pd.DataFrame(columns=df.columns)
 
             elif filename == "payer_transitions.csv":
                 # Payer transitions: temporal split based on encounter date range
                 facility_data[filename] = self._split_payer_transitions_temporally(
-                    df,
-                    facility_patients,
-                    facility_data["encounters.csv"]
+                    df, facility_patients, facility_data["encounters.csv"]
                 )
 
             else:
                 # Unknown table type - skip with warning
-                print(f"Warning: Unknown table type {filename}, skipping for facility {facility_id}")
+                print(
+                    f"Warning: Unknown table type {filename}, skipping for facility {facility_id}"
+                )
                 facility_data[filename] = pd.DataFrame(columns=df.columns)
 
         return facility_data
@@ -153,24 +163,21 @@ class CSVSplitter:
             return pd.DataFrame(columns=payer_transitions_df.columns)
 
         # Calculate encounter date range for each patient at this facility
-        patient_date_ranges = facility_encounters_df.groupby("PATIENT")["START"].agg(
-            min_date="min",
-            max_date="max"
-        ).reset_index()
+        patient_date_ranges = (
+            facility_encounters_df.groupby("PATIENT")["START"]
+            .agg(min_date="min", max_date="max")
+            .reset_index()
+        )
 
         # Merge with transitions to get date ranges
         merged = patient_transitions.merge(
-            patient_date_ranges,
-            left_on="PATIENT",
-            right_on="PATIENT",
-            how="inner"
+            patient_date_ranges, left_on="PATIENT", right_on="PATIENT", how="inner"
         )
 
         # Filter: Include transitions that overlap with facility's encounter period
         # START_DATE <= max_encounter_date AND (END_DATE >= min_encounter_date OR END_DATE is null)
-        mask = (
-            (merged["START_DATE"] <= merged["max_date"]) &
-            ((merged["END_DATE"] >= merged["min_date"]) | (merged["END_DATE"].isna()))
+        mask = (merged["START_DATE"] <= merged["max_date"]) & (
+            (merged["END_DATE"] >= merged["min_date"]) | (merged["END_DATE"].isna())
         )
 
         filtered_transitions = merged[mask].copy()

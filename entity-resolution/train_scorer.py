@@ -28,19 +28,31 @@ from sklearn.preprocessing import StandardScaler
 # Add paths for imports inside Docker container (/app)
 _script_dir = Path(__file__).resolve().parent
 _project_root = _script_dir.parent
-sys.path.insert(0, str(_script_dir))    # entity-resolution/ -> import src.*
+sys.path.insert(0, str(_script_dir))  # entity-resolution/ -> import src.*
 sys.path.insert(0, str(_project_root))  # project root -> import shared.*
 
 from src.data_loader import create_record_id  # noqa: E402
+
 from shared.data_loader import load_facility_patients  # noqa: E402
-from shared.ground_truth import load_ground_truth, add_record_ids_to_ground_truth  # noqa: E402
+from shared.ground_truth import (  # noqa: E402
+    add_record_ids_to_ground_truth,
+    load_ground_truth,
+)
 
 logger = logging.getLogger(__name__)
 
 DEMO_FEATURES = [
-    "first_name_sim", "last_name_sim", "address_sim", "city_sim",
-    "state_match", "zip_match", "ssn_match", "birthdate_match",
-    "total_score", "name_score", "address_score",
+    "first_name_sim",
+    "last_name_sim",
+    "address_sim",
+    "city_sim",
+    "state_match",
+    "zip_match",
+    "ssn_match",
+    "birthdate_match",
+    "total_score",
+    "name_score",
+    "address_score",
 ]
 ALL_FEATURES = DEMO_FEATURES + ["llm_logit"]
 
@@ -112,16 +124,33 @@ def build_dataset(
 
 
 @click.command()
-@click.option("--augmented-dir", required=True, type=click.Path(exists=True),
-              help="Path to augmented data directory (for ground truth)")
-@click.option("--features", required=True, type=click.Path(exists=True),
-              help="Path to features.csv from resolve stage")
-@click.option("--predictions", required=True, type=click.Path(exists=True),
-              help="Path to predictions.csv from infer stage")
-@click.option("--output-dir", required=True, type=click.Path(),
-              help="Output directory for model and metrics")
-@click.option("--cv-folds", default=5, type=int,
-              help="Number of cross-validation folds")
+@click.option(
+    "--augmented-dir",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to augmented data directory (for ground truth)",
+)
+@click.option(
+    "--features",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to features.csv from resolve stage",
+)
+@click.option(
+    "--predictions",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to predictions.csv from infer stage",
+)
+@click.option(
+    "--output-dir",
+    required=True,
+    type=click.Path(),
+    help="Output directory for model and metrics",
+)
+@click.option(
+    "--cv-folds", default=5, type=int, help="Number of cross-validation folds"
+)
 def main(augmented_dir, features, predictions, output_dir, cv_folds):
     """Train a logistic regression scorer for gray zone entity resolution."""
     logging.basicConfig(
@@ -171,9 +200,18 @@ def main(augmented_dir, features, predictions, output_dir, cv_folds):
         p = tp / (tp + fp) if (tp + fp) else 0
         r = tp / (tp + fn) if (tp + fn) else 0
         f1 = 2 * p * r / (p + r) if (p + r) else 0
-        fold_metrics.append({"fold": fold + 1, "tp": tp, "fp": fp, "fn": fn,
-                             "precision": p, "recall": r, "f1": f1})
-        logger.info(f"  Fold {fold+1}: P={p:.3f} R={r:.3f} F1={f1:.3f}")
+        fold_metrics.append(
+            {
+                "fold": fold + 1,
+                "tp": tp,
+                "fp": fp,
+                "fn": fn,
+                "precision": p,
+                "recall": r,
+                "f1": f1,
+            }
+        )
+        logger.info(f"  Fold {fold + 1}: P={p:.3f} R={r:.3f} F1={f1:.3f}")
 
     # Overall CV metrics
     tp = int(((oof_preds == 1) & (y == 1)).sum())
@@ -223,7 +261,9 @@ def main(augmented_dir, features, predictions, output_dir, cv_folds):
         "cv_fp": fp,
         "cv_fn": fn,
         "fold_metrics": fold_metrics,
-        "coefficients": {feat: float(coef) for feat, coef in zip(ALL_FEATURES, model.coef_[0])},
+        "coefficients": {
+            feat: float(coef) for feat, coef in zip(ALL_FEATURES, model.coef_[0])
+        },
         "intercept": float(model.intercept_[0]),
     }
 

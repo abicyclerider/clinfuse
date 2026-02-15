@@ -7,17 +7,19 @@ Supports multiple classification approaches:
 - LLM fallback (future extension for medical history comparison)
 """
 
-import pandas as pd
+import logging
+
 import numpy as np
+import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-import logging
 
 logger = logging.getLogger(__name__)
 
 
-def classify_pairs(features: pd.DataFrame, config: dict,
-                  ground_truth: pd.DataFrame = None) -> pd.Series:
+def classify_pairs(
+    features: pd.DataFrame, config: dict, ground_truth: pd.DataFrame = None
+) -> pd.Series:
     """
     Classify candidate pairs as matches (1) or non-matches (0).
 
@@ -29,17 +31,17 @@ def classify_pairs(features: pd.DataFrame, config: dict,
     Returns:
         Boolean Series indicating matches
     """
-    method = config.get('classification', {}).get('method', 'threshold')
+    method = config.get("classification", {}).get("method", "threshold")
 
-    if method == 'threshold':
+    if method == "threshold":
         return classify_threshold(features, config)
 
-    elif method == 'logistic_regression':
+    elif method == "logistic_regression":
         if ground_truth is None:
             raise ValueError("Ground truth required for logistic_regression method")
         return classify_probabilistic(features, ground_truth, config)
 
-    elif method == 'tiered':
+    elif method == "tiered":
         return classify_tiered(features, config)
 
     else:
@@ -57,16 +59,19 @@ def classify_threshold(features: pd.DataFrame, config: dict) -> pd.Series:
     Returns:
         Boolean Series indicating matches
     """
-    threshold = config.get('classification', {}).get('threshold', 3.5)
+    threshold = config.get("classification", {}).get("threshold", 3.5)
 
     # Calculate total similarity score
-    if 'total_score' not in features.columns:
+    if "total_score" not in features.columns:
         from .comparison import add_composite_features
+
         features = add_composite_features(features)
 
-    matches = features['total_score'] >= threshold
+    matches = features["total_score"] >= threshold
 
-    logger.info(f"Threshold classification: {matches.sum()} matches at threshold {threshold}")
+    logger.info(
+        f"Threshold classification: {matches.sum()} matches at threshold {threshold}"
+    )
 
     return matches
 
@@ -89,17 +94,18 @@ def classify_tiered(features: pd.DataFrame, config: dict) -> pd.Series:
     Returns:
         Boolean Series indicating matches
     """
-    cls_config = config.get('classification', {})
-    auto_reject = cls_config.get('auto_reject_threshold', 4.0)
-    auto_match = cls_config.get('auto_match_threshold', 6.0)
-    single_threshold = cls_config.get('single_threshold', 5.60)
+    cls_config = config.get("classification", {})
+    auto_reject = cls_config.get("auto_reject_threshold", 4.0)
+    auto_match = cls_config.get("auto_match_threshold", 6.0)
+    single_threshold = cls_config.get("single_threshold", 5.60)
 
     # Ensure total_score exists
-    if 'total_score' not in features.columns:
+    if "total_score" not in features.columns:
         from .comparison import add_composite_features
+
         features = add_composite_features(features)
 
-    scores = features['total_score']
+    scores = features["total_score"]
 
     # Auto-match: score >= auto_match_threshold
     matches = scores >= auto_match
@@ -113,14 +119,17 @@ def classify_tiered(features: pd.DataFrame, config: dict) -> pd.Series:
     logger.info(f"Tiered classification: {matches.sum()} matches")
     logger.info(f"  Auto-match (>={auto_match}): {(scores >= auto_match).sum()}")
     logger.info(f"  Gray zone ({auto_reject}-{auto_match}): {gray_zone.sum()}")
-    logger.info(f"  Gray zone matches (>={single_threshold}): {(gray_zone & (scores >= single_threshold)).sum()}")
+    logger.info(
+        f"  Gray zone matches (>={single_threshold}): {(gray_zone & (scores >= single_threshold)).sum()}"
+    )
     logger.info(f"  Auto-reject (<{auto_reject}): {(scores < auto_reject).sum()}")
 
     return matches
 
 
-def classify_probabilistic(features: pd.DataFrame, ground_truth: pd.DataFrame,
-                          config: dict) -> pd.Series:
+def classify_probabilistic(
+    features: pd.DataFrame, ground_truth: pd.DataFrame, config: dict
+) -> pd.Series:
     """
     Probabilistic classification using logistic regression.
 
@@ -136,9 +145,9 @@ def classify_probabilistic(features: pd.DataFrame, ground_truth: pd.DataFrame,
     labeled_features = label_features_with_ground_truth(features, ground_truth)
 
     # Split into train/test
-    split_ratio = config.get('classification', {}).get('train_test_split', 0.8)
-    X = labeled_features.drop('is_match', axis=1)
-    y = labeled_features['is_match']
+    split_ratio = config.get("classification", {}).get("train_test_split", 0.8)
+    X = labeled_features.drop("is_match", axis=1)
+    y = labeled_features["is_match"]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, train_size=split_ratio, random_state=42, stratify=y
@@ -163,9 +172,9 @@ def classify_probabilistic(features: pd.DataFrame, ground_truth: pd.DataFrame,
     return matches
 
 
-
-def label_features_with_ground_truth(features: pd.DataFrame,
-                                    ground_truth: pd.DataFrame) -> pd.DataFrame:
+def label_features_with_ground_truth(
+    features: pd.DataFrame, ground_truth: pd.DataFrame
+) -> pd.DataFrame:
     """
     Label feature vectors with ground truth (match=1, non-match=0).
 
@@ -177,15 +186,20 @@ def label_features_with_ground_truth(features: pd.DataFrame,
         DataFrame with added 'is_match' column
     """
     # Create ground truth pair set
-    from .blocking import generate_true_pairs_from_ground_truth
 
     # For this to work, we need record_id mapping - assuming it's in ground_truth
     # Ground truth should have: facility_id, patient_id, true_patient_id, record_id
-    true_id_col = 'true_patient_id' if 'true_patient_id' in ground_truth.columns else 'original_patient_uuid'
+    true_id_col = (
+        "true_patient_id"
+        if "true_patient_id" in ground_truth.columns
+        else "original_patient_uuid"
+    )
     true_pairs = set()
 
     for true_id, group in ground_truth.groupby(true_id_col):
-        record_ids = group['record_id'].dropna().tolist() if 'record_id' in group.columns else []
+        record_ids = (
+            group["record_id"].dropna().tolist() if "record_id" in group.columns else []
+        )
 
         for i in range(len(record_ids)):
             for j in range(i + 1, len(record_ids)):
@@ -194,16 +208,18 @@ def label_features_with_ground_truth(features: pd.DataFrame,
 
     # Label features
     features = features.copy()
-    features['is_match'] = False
+    features["is_match"] = False
 
     for idx in features.index:
         pair = tuple(sorted([idx[0], idx[1]]))
         if pair in true_pairs:
-            features.loc[idx, 'is_match'] = True
+            features.loc[idx, "is_match"] = True
 
-    match_count = features['is_match'].sum()
+    match_count = features["is_match"].sum()
     total_count = len(features)
-    logger.info(f"Labeled {match_count} matches and {total_count - match_count} non-matches")
+    logger.info(
+        f"Labeled {match_count} matches and {total_count - match_count} non-matches"
+    )
 
     return features
 
@@ -225,14 +241,22 @@ def apply_deterministic_rules(features: pd.DataFrame) -> pd.Series:
     matches = pd.Series(False, index=features.index)
 
     # Rule 1: SSN + birthdate exact match
-    if 'ssn_match' in features.columns and 'birthdate_match' in features.columns:
-        rule1 = (features['ssn_match'] == 1) & (features['birthdate_match'] == 1)
+    if "ssn_match" in features.columns and "birthdate_match" in features.columns:
+        rule1 = (features["ssn_match"] == 1) & (features["birthdate_match"] == 1)
         matches |= rule1
         logger.debug(f"Rule 1 (SSN + DOB): {rule1.sum()} matches")
 
     # Rule 2: SSN + high name similarity
-    if 'ssn_match' in features.columns and 'first_name_sim' in features.columns and 'last_name_sim' in features.columns:
-        rule2 = (features['ssn_match'] == 1) & (features['first_name_sim'] >= 0.9) & (features['last_name_sim'] >= 0.9)
+    if (
+        "ssn_match" in features.columns
+        and "first_name_sim" in features.columns
+        and "last_name_sim" in features.columns
+    ):
+        rule2 = (
+            (features["ssn_match"] == 1)
+            & (features["first_name_sim"] >= 0.9)
+            & (features["last_name_sim"] >= 0.9)
+        )
         matches |= rule2
         logger.debug(f"Rule 2 (SSN + names): {rule2.sum()} matches")
 
@@ -241,8 +265,11 @@ def apply_deterministic_rules(features: pd.DataFrame) -> pd.Series:
     return matches
 
 
-def tune_threshold(features: pd.DataFrame, ground_truth: pd.DataFrame,
-                  threshold_range: tuple = (2.0, 5.0, 0.1)) -> dict:
+def tune_threshold(
+    features: pd.DataFrame,
+    ground_truth: pd.DataFrame,
+    threshold_range: tuple = (2.0, 5.0, 0.1),
+) -> dict:
     """
     Find optimal threshold by evaluating precision/recall across range.
 
@@ -254,10 +281,9 @@ def tune_threshold(features: pd.DataFrame, ground_truth: pd.DataFrame,
     Returns:
         Dictionary with optimal threshold and metrics
     """
-    from .evaluation import evaluate_matches
     from .comparison import add_composite_features
 
-    if 'total_score' not in features.columns:
+    if "total_score" not in features.columns:
         features = add_composite_features(features)
 
     labeled_features = label_features_with_ground_truth(features, ground_truth)
@@ -266,27 +292,35 @@ def tune_threshold(features: pd.DataFrame, ground_truth: pd.DataFrame,
     results = []
 
     for threshold in thresholds:
-        matches = labeled_features['total_score'] >= threshold
-        tp = ((labeled_features['is_match'] == True) & (matches == True)).sum()
-        fp = ((labeled_features['is_match'] == False) & (matches == True)).sum()
-        fn = ((labeled_features['is_match'] == True) & (matches == False)).sum()
+        matches = labeled_features["total_score"] >= threshold
+        tp = ((labeled_features["is_match"] == True) & (matches == True)).sum()
+        fp = ((labeled_features["is_match"] == False) & (matches == True)).sum()
+        fn = ((labeled_features["is_match"] == True) & (matches == False)).sum()
 
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0
+        )
 
-        results.append({
-            'threshold': threshold,
-            'precision': precision,
-            'recall': recall,
-            'f1': f1,
-            'matches': matches.sum()
-        })
+        results.append(
+            {
+                "threshold": threshold,
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+                "matches": matches.sum(),
+            }
+        )
 
     results_df = pd.DataFrame(results)
-    best_idx = results_df['f1'].idxmax()
+    best_idx = results_df["f1"].idxmax()
     best_result = results_df.iloc[best_idx].to_dict()
 
-    logger.info(f"Optimal threshold: {best_result['threshold']:.2f} (F1={best_result['f1']:.3f})")
+    logger.info(
+        f"Optimal threshold: {best_result['threshold']:.2f} (F1={best_result['f1']:.3f})"
+    )
 
     return best_result
