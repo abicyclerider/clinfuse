@@ -4,17 +4,9 @@ Data loading and preparation for entity resolution.
 Delegates core loading to shared.data_loader.
 """
 
-import sys
-from pathlib import Path
+import logging
 
 import pandas as pd
-
-# Add project root to path so shared module is importable
-_project_root = str(Path(__file__).resolve().parent.parent.parent)
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
-import logging  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

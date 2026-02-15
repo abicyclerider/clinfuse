@@ -48,25 +48,25 @@ stages:
   resolve:
     cmd: >-
       rm -rf output/resolved &&
-      docker build -f entity-resolution/Dockerfile -t entity-resolution . &&
+      docker build -f entity_resolution/Dockerfile -t entity_resolution . &&
       docker run --rm
       -v $(pwd)/output/augmented:/data/augmented:ro
       -v $(pwd)/output/resolved:/data/resolved
-      entity-resolution
-      python entity-resolution/resolve.py
+      entity_resolution
+      python entity_resolution/resolve.py
       --augmented-dir /data/augmented
       --output-dir /data/resolved
-      --config entity-resolution/config/matching_config.yaml
+      --config entity_resolution/config/matching_config.yaml
     params:
     - resolve.auto_match_probability
     - resolve.auto_reject_probability
     deps:
     - output/augmented
-    - entity-resolution/Dockerfile
-    - entity-resolution/resolve.py
-    - entity-resolution/src/
-    - entity-resolution/config/matching_config.yaml
-    - entity-resolution/requirements-runtime.txt
+    - entity_resolution/Dockerfile
+    - entity_resolution/resolve.py
+    - entity_resolution/src/
+    - entity_resolution/config/matching_config.yaml
+    - entity_resolution/requirements-runtime.txt
     - shared/
     outs:
     - output/resolved:
@@ -99,21 +99,21 @@ stages:
       -v $(pwd)/output/resolved:/data/resolved:ro
       -v $(pwd)/output/inferred:/data/inferred:ro
       -v $(pwd)/output/golden_records:/data/golden_records
-      entity-resolution
-      python entity-resolution/build_golden_records.py
+      entity_resolution
+      python entity_resolution/build_golden_records.py
       --augmented-dir /data/augmented
       --auto-matches /data/resolved/auto_matches.parquet
       --predictions /data/inferred/predictions.parquet
       --features /data/resolved/features.parquet
       --output-dir /data/golden_records
-      --config entity-resolution/config/matching_config.yaml
+      --config entity_resolution/config/matching_config.yaml
     deps:
     - output/resolved/auto_matches.parquet
     - output/resolved/features.parquet
     - output/inferred/predictions.parquet
     - output/augmented
-    - entity-resolution/build_golden_records.py
-    - entity-resolution/src/
+    - entity_resolution/build_golden_records.py
+    - entity_resolution/src/
     - shared/
     outs:
     - output/golden_records:

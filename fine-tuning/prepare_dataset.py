@@ -16,7 +16,6 @@ import argparse
 import json
 import os
 import random
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,12 +24,6 @@ from datasets import Dataset, DatasetDict
 from dotenv import load_dotenv
 from huggingface_hub import login, whoami
 from transformers import AutoTokenizer
-
-# Add project root so shared/ imports work
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
 
 from shared.data_loader import load_facility_patients
 from shared.ground_truth import (
@@ -90,9 +83,8 @@ def main():
     args = parser.parse_args()
 
     # Resolve augmented directory and auto-detect latest run_* subdir
-    augmented_dir = args.augmented_dir or os.path.join(
-        PROJECT_ROOT, "output", "augmented"
-    )
+    _project_root = Path(__file__).resolve().parent.parent
+    augmented_dir = args.augmented_dir or str(_project_root / "output" / "augmented")
     run_dirs = sorted(Path(augmented_dir).glob("run_*"))
     if not run_dirs:
         raise FileNotFoundError(f"No run_* directories found in {augmented_dir}")

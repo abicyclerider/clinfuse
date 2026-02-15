@@ -6,21 +6,14 @@ Delegates core metrics to shared.evaluation.
 """
 
 import logging
-import sys
-from pathlib import Path
 
 import pandas as pd
 
-# Add project root to path so shared module is importable
-_project_root = str(Path(__file__).resolve().parent.parent.parent)
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
-from shared.evaluation import (  # noqa: E402
+from shared.evaluation import (
     calculate_confusion_matrix,
     calculate_metrics,
 )
-from shared.ground_truth import generate_true_pairs_from_ground_truth  # noqa: E402
+from shared.ground_truth import generate_true_pairs_from_ground_truth
 
 logger = logging.getLogger(__name__)
 

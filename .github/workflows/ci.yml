@@ -30,31 +30,27 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install mypy pandas-stubs types-PyYAML types-python-dateutil
-      - run: mypy shared/ augmentation/ entity-resolution/src/
+      - run: mypy shared/ augmentation/ entity_resolution/src/
 
   test-augmentation:
     runs-on: ubuntu-latest
-    env:
-      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r augmentation/requirements.txt
+      - run: pip install -e . -r augmentation/requirements.txt
       - run: pytest augmentation/tests -m "not slow"
 
   test-entity-resolution:
     runs-on: ubuntu-latest
-    env:
-      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r entity-resolution/requirements-runtime.txt -r entity-resolution/requirements.txt
-      - run: pytest entity-resolution/tests
+      - run: pip install -e . -r entity_resolution/requirements-runtime.txt -r entity_resolution/requirements.txt
+      - run: pytest entity_resolution/tests
 
   docker-build-light:
     runs-on: ubuntu-latest
@@ -68,8 +64,8 @@ jobs:
           - name: augmentation
             dockerfile: augmentation/Dockerfile
             context: augmentation
-          - name: entity-resolution
-            dockerfile: entity-resolution/Dockerfile
+          - name: entity_resolution
+            dockerfile: entity_resolution/Dockerfile
             context: .
     steps:
       - uses: actions/checkout@v4

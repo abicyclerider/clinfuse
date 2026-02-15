@@ -12,7 +12,7 @@ Generate synthetic patient data, augment it with realistic errors and duplicates
 SyntheticMass/
 ├── synthea-runner/       # Synthea patient data generation (Docker)
 ├── augmentation/         # Error injection, duplicates, ground truth labels
-├── entity-resolution/    # Blocking, candidate pair generation, classification
+├── entity_resolution/    # Blocking, candidate pair generation, classification
 ├── fine-tuning/          # MedGemma 4B QLoRA training & evaluation
 ├── shared/               # Shared utilities (summarizer, etc.)
 ├── analysis/             # Exploratory notebooks
@@ -23,7 +23,7 @@ SyntheticMass/
 
 1. **Generate** — `synthea-runner/` creates 10K synthetic patients via [Synthea](https://github.com/synthetichealth/synthea)
 2. **Augment** — `augmentation/` injects typos, formatting changes, missing fields, and duplicates with ground-truth labels
-3. **Block & Pair** — `entity-resolution/` applies rule-based blocking to reduce the candidate space, then generates record pairs
+3. **Block & Pair** — `entity_resolution/` applies rule-based blocking to reduce the candidate space, then generates record pairs
 4. **Classify** — Fine-tuned MedGemma 4B text-only classifier scores each pair as match/non-match
 
 ## Key Results

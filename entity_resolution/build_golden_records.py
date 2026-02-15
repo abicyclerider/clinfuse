@@ -11,26 +11,18 @@ Produces:
 import json
 import logging
 import math
-import sys
 from pathlib import Path
 
 import click
 import pandas as pd
 import yaml
+from src.data_loader import create_record_id
+from src.evaluation import evaluate_golden_records, evaluate_matches
+from src.golden_record import create_golden_records
+from src.splink_linker import splink_logit
 
-# Add paths for imports inside Docker container (/app)
-_script_dir = Path(__file__).resolve().parent
-_project_root = _script_dir.parent
-sys.path.insert(0, str(_script_dir))  # entity-resolution/ -> import src.*
-sys.path.insert(0, str(_project_root))  # project root -> import shared.*
-
-from src.data_loader import create_record_id  # noqa: E402
-from src.evaluation import evaluate_golden_records, evaluate_matches  # noqa: E402
-from src.golden_record import create_golden_records  # noqa: E402
-from src.splink_linker import splink_logit  # noqa: E402
-
-from shared.data_loader import load_facility_patients  # noqa: E402
-from shared.ground_truth import (  # noqa: E402
+from shared.data_loader import load_facility_patients
+from shared.ground_truth import (
     add_record_ids_to_ground_truth,
     load_ground_truth,
 )

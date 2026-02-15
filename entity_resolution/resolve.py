@@ -11,22 +11,14 @@ Produces:
 
 import json
 import logging
-import sys
 from pathlib import Path
 
 import click
 import numpy as np
 import pandas as pd
 import yaml
-
-# Add paths for imports inside Docker container (/app)
-_script_dir = Path(__file__).resolve().parent
-_project_root = _script_dir.parent
-sys.path.insert(0, str(_script_dir))  # entity-resolution/ -> import src.*
-sys.path.insert(0, str(_project_root))  # project root -> import shared.*
-
-from src.data_loader import create_record_id  # noqa: E402
-from src.splink_linker import (  # noqa: E402
+from src.data_loader import create_record_id
+from src.splink_linker import (
     classify_predictions,
     create_linker,
     evaluate_splink_only,
@@ -34,15 +26,19 @@ from src.splink_linker import (  # noqa: E402
     train_model,
 )
 
-from shared.data_loader import load_facility_patients  # noqa: E402
-from shared.ground_truth import (  # noqa: E402
+from shared.data_loader import load_facility_patients
+from shared.ground_truth import (
     add_record_ids_to_ground_truth,
     generate_true_pairs_from_ground_truth,
     load_ground_truth,
 )
-from shared.medical_records import (  # noqa: E402
+from shared.medical_records import (
     get_patient_records,
     load_medical_records,
+)
+from shared.summarize import (
+    INSTRUCTION,
+    summarize_diff_friendly_from_records,
 )
 
 # Only load the record types the summarizer actually uses
@@ -53,10 +49,6 @@ SUMMARIZER_RECORD_TYPES = [
     "observations",
     "procedures",
 ]
-from shared.summarize import (  # noqa: E402
-    INSTRUCTION,
-    summarize_diff_friendly_from_records,
-)
 
 logger = logging.getLogger(__name__)
 
