@@ -213,7 +213,7 @@ class DateOffByOne(BaseError):
         if not self.should_apply(value):
             return value
 
-        # Value should be a datetime object (parsed by csv_handler)
+        # Value should be a datetime object (parsed by data_handler)
         if not hasattr(value, "year"):
             return value
 

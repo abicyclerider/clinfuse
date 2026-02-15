@@ -1,4 +1,4 @@
-"""CSV reading and writing utilities."""
+"""Data reading and writing utilities for Synthea CSV input and Parquet output."""
 
 import re
 from pathlib import Path
@@ -7,8 +7,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 
-class CSVHandler:
-    """Handles CSV file operations with consistent settings."""
+class DataHandler:
+    """Reads Synthea CSV input and writes facility Parquet output."""
 
     # Standard CSV files in Synthea output
     SYNTHEA_CSV_FILES = [

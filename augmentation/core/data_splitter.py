@@ -1,18 +1,18 @@
-"""CSV splitting logic to partition data by facility."""
+"""Data splitting logic to partition records by facility."""
 
 from typing import Dict, List, Set
 
 import pandas as pd
 
-from ..utils import CSVHandler
+from ..utils import DataHandler
 
 
-class CSVSplitter:
-    """Splits Synthea CSV files by facility while maintaining referential integrity."""
+class DataSplitter:
+    """Splits Synthea data by facility while maintaining referential integrity."""
 
     def __init__(self):
-        """Initialize CSV splitter."""
-        self.csv_handler = CSVHandler()
+        """Initialize data splitter."""
+        self.data_handler = DataHandler()
 
     def split_csvs_by_facility(
         self,
@@ -85,7 +85,7 @@ class CSVSplitter:
 
         # Step 3: Process each CSV type
         for filename, df in synthea_csvs.items():
-            if filename in self.csv_handler.REFERENCE_TABLES:
+            if filename in self.data_handler.REFERENCE_TABLES:
                 # Reference tables: copy complete table to all facilities
                 facility_data[filename] = df.copy()
 
@@ -97,7 +97,7 @@ class CSVSplitter:
                 # Encounters: filter by facility assignment
                 facility_data[filename] = df[df["Id"].isin(facility_encounters)].copy()
 
-            elif filename in self.csv_handler.ENCOUNTER_LINKED_TABLES:
+            elif filename in self.data_handler.ENCOUNTER_LINKED_TABLES:
                 # Encounter-linked tables: follow encounter assignment
                 facility_data[filename] = df[
                     df["ENCOUNTER"].isin(facility_encounters)

@@ -1,37 +1,10 @@
 """
 Shared evaluation metrics for entity resolution.
 
-Compares predicted matches against ground truth to calculate precision, recall, F1.
+Provides core confusion matrix and metric calculations.
 """
 
-import logging
 from typing import Tuple
-
-logger = logging.getLogger(__name__)
-
-
-def evaluate_matches(predicted_pairs: set, true_pairs: set) -> dict:
-    """
-    Evaluate predicted match pairs against ground truth pairs.
-
-    Args:
-        predicted_pairs: Set of predicted matching pairs (record_id_1, record_id_2)
-        true_pairs: Set of true matching pairs (record_id_1, record_id_2)
-
-    Returns:
-        Dictionary with evaluation metrics
-    """
-    tp, fp, fn = calculate_confusion_matrix(predicted_pairs, true_pairs)
-    metrics = calculate_metrics(tp, fp, fn)
-
-    metrics["predicted_pairs"] = len(predicted_pairs)
-    metrics["true_pairs"] = len(true_pairs)
-
-    logger.info(
-        f"Evaluation: P={metrics['precision']:.3f}, R={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}"
-    )
-
-    return metrics
 
 
 def calculate_confusion_matrix(

@@ -13,14 +13,14 @@ from augmentation.config import (
     PathConfig,
 )
 from augmentation.core import (
-    CSVSplitter,
+    DataSplitter,
     ErrorInjector,
     FacilityAssigner,
     GroundTruthTracker,
 )
 from augmentation.generators import FacilityGenerator
 from augmentation.tests.fixtures.sample_data import create_sample_synthea_csvs
-from augmentation.utils import CSVHandler, DataValidator
+from augmentation.utils import DataHandler, DataValidator
 
 
 class TestAugmentationPipeline:
@@ -87,8 +87,8 @@ class TestAugmentationPipeline:
         assert len(encounter_facilities) == 100
 
         # Step 3: Split CSVs by facility
-        csv_splitter = CSVSplitter()
-        facility_csvs = csv_splitter.split_csvs_by_facility(
+        data_splitter = DataSplitter()
+        facility_csvs = data_splitter.split_csvs_by_facility(
             sample_csvs, patient_facilities, encounter_facilities
         )
 
@@ -145,11 +145,11 @@ class TestAugmentationPipeline:
             assert is_valid, f"Facility {facility_id} validation failed: {errors}"
 
         # Step 6: Write outputs
-        csv_handler = CSVHandler()
+        data_handler = DataHandler()
         output_dir = temp_dir / "output"
 
         for facility_id, csvs in facility_csvs.items():
-            csv_handler.write_facility_data(
+            data_handler.write_facility_data(
                 csvs, output_dir / "facilities", facility_id
             )
 
@@ -185,8 +185,8 @@ class TestAugmentationPipeline:
             facility_assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
-        csv_splitter = CSVSplitter()
-        facility_csvs = csv_splitter.split_csvs_by_facility(
+        data_splitter = DataSplitter()
+        facility_csvs = data_splitter.split_csvs_by_facility(
             sample_csvs, patient_facilities, encounter_facilities
         )
 
@@ -227,8 +227,8 @@ class TestAugmentationPipeline:
             facility_assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
-        csv_splitter = CSVSplitter()
-        facility_csvs = csv_splitter.split_csvs_by_facility(
+        data_splitter = DataSplitter()
+        facility_csvs = data_splitter.split_csvs_by_facility(
             sample_csvs, patient_facilities, encounter_facilities
         )
 
@@ -253,8 +253,8 @@ class TestAugmentationPipeline:
             facility_assigner.assign_patients_to_facilities(patients_df, encounters_df)
         )
 
-        csv_splitter = CSVSplitter()
-        facility_csvs = csv_splitter.split_csvs_by_facility(
+        data_splitter = DataSplitter()
+        facility_csvs = data_splitter.split_csvs_by_facility(
             sample_csvs, patient_facilities, encounter_facilities
         )
 

@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 
-from .csv_handler import CSVHandler
+from .data_handler import DataHandler
 
 
 class DataValidator:
@@ -12,7 +12,7 @@ class DataValidator:
 
     def __init__(self):
         """Initialize validator."""
-        self.csv_handler = CSVHandler()
+        self.data_handler = DataHandler()
 
     def validate_facility_csvs(
         self, facility_csvs: Dict[str, pd.DataFrame]
@@ -93,7 +93,7 @@ class DataValidator:
         encounter_ids = set(facility_csvs["encounters.csv"]["Id"].values)
 
         # Check encounter-linked tables
-        for table_name in self.csv_handler.ENCOUNTER_LINKED_TABLES:
+        for table_name in self.data_handler.ENCOUNTER_LINKED_TABLES:
             if table_name in facility_csvs and len(facility_csvs[table_name]) > 0:
                 df = facility_csvs[table_name]
                 if "ENCOUNTER" in df.columns:

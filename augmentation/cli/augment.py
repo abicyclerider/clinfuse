@@ -17,9 +17,9 @@ from rich.progress import (
 from rich.table import Table
 
 from ..config import AugmentationConfig
-from ..core import CSVSplitter, ErrorInjector, FacilityAssigner, GroundTruthTracker
+from ..core import DataSplitter, ErrorInjector, FacilityAssigner, GroundTruthTracker
 from ..generators import FacilityGenerator
-from ..utils import CSVHandler, DataValidator
+from ..utils import DataHandler, DataValidator
 
 console = Console()
 
@@ -203,8 +203,8 @@ def run_augmentation_pipeline(
     ) as progress:
         # Task 1: Load CSV files
         task1 = progress.add_task("[cyan]Loading Synthea CSV files...", total=None)
-        csv_handler = CSVHandler()
-        synthea_csvs = csv_handler.load_synthea_csvs(config.paths.input_dir)
+        data_handler = DataHandler()
+        synthea_csvs = data_handler.load_synthea_csvs(config.paths.input_dir)
         patients_df = synthea_csvs["patients.csv"]
         encounters_df = synthea_csvs["encounters.csv"]
         progress.update(task1, completed=True, total=1)
@@ -242,8 +242,8 @@ def run_augmentation_pipeline(
         task4 = progress.add_task(
             "[cyan]Splitting CSV files by facility...", total=None
         )
-        csv_splitter = CSVSplitter()
-        facility_csvs = csv_splitter.split_csvs_by_facility(
+        data_splitter = DataSplitter()
+        facility_csvs = data_splitter.split_csvs_by_facility(
             synthea_csvs, patient_facilities, encounter_facilities
         )
         progress.update(task4, completed=True, total=1)
@@ -315,7 +315,7 @@ def run_augmentation_pipeline(
 
         # Write facility data as Parquet
         for facility_id, csvs in facility_csvs.items():
-            csv_handler.write_facility_data(
+            data_handler.write_facility_data(
                 csvs, output_dir / "facilities", facility_id
             )
             progress.update(task6, advance=1)
