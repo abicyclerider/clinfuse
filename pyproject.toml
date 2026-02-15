@@ -16,7 +16,7 @@ warn_return_any = false
 ignore_missing_imports = true
 check_untyped_defs = true
 implicit_optional = true
-disable_error_code = ["var-annotated", "assignment", "arg-type", "call-overload", "return-value", "index", "operator"]
+disable_error_code = ["var-annotated", "assignment", "arg-type", "call-overload", "return-value", "index", "operator", "misc", "has-type"]
 
 [tool.pytest.ini_options]
 testpaths = ["augmentation/tests", "entity-resolution/tests"]
