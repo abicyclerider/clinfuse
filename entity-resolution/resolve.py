@@ -261,11 +261,11 @@ def main(augmented_dir, output_dir, config):
         f"({true_pairs_found}/{len(true_pairs)} true pairs in predictions)"
     )
 
-    # --- Step 7: Save auto_matches.csv ---
+    # --- Step 7: Save auto-matches ---
     auto_matches_out = auto_matches[
         ["record_id_1", "record_id_2", "total_score"]
     ].copy()
-    auto_matches_out.to_csv(out / "auto_matches.csv", index=False)
+    auto_matches_out.to_parquet(out / "auto_matches.parquet", index=False)
     logger.info(f"Saved {len(auto_matches_out)} auto-matches")
 
     # --- Step 8: Gray zone pair text generation ---
@@ -275,11 +275,11 @@ def main(augmented_dir, output_dir, config):
     )
 
     gray_zone_df = generate_gray_zone_texts(gray_zone, patients_df, medical_records)
-    gray_zone_df.to_csv(out / "gray_zone_pairs.csv", index=False)
+    gray_zone_df.to_parquet(out / "gray_zone_pairs.parquet", index=False)
     logger.info(f"Saved {len(gray_zone_df)} gray zone pairs")
 
-    # --- Step 9: Save features.csv ---
-    all_predictions.to_csv(out / "features.csv", index=False)
+    # --- Step 9: Save features ---
+    all_predictions.to_parquet(out / "features.parquet", index=False)
 
     # --- Step 10: Splink-only evaluation ---
     splink_metrics = evaluate_splink_only(all_predictions, true_pairs, cfg)

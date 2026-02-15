@@ -3,9 +3,9 @@
 Golden Records stage: combine auto-matches + LLM predictions -> golden records -> evaluation.
 
 Produces:
-  golden_records.csv       — master patient index with facility provenance
-  all_matches.csv          — all matched pairs with source (auto_match/llm) and scores
-  evaluation_metrics.json  — precision, recall, F1
+  golden_records.parquet     — master patient index with facility provenance
+  all_matches.parquet        — all matched pairs with source (auto_match/llm) and scores
+  evaluation_metrics.json    — precision, recall, F1
 """
 
 import json
@@ -133,12 +133,12 @@ def main(
     logger.info(f"Auto-matches: {len(auto_pairs)}")
 
     # --- Step 2: Score gray zone predictions using Splink probability + LLM logit ---
-    pred_df = pd.read_csv(predictions)
+    pred_df = pd.read_parquet(predictions)
 
     # Load features for Splink match probabilities
     feat_lookup = {}
     if features_path is not None:
-        feat_df = pd.read_csv(features_path)
+        feat_df = pd.read_parquet(features_path)
         for _, row in feat_df.iterrows():
             pair = tuple(sorted([row["record_id_1"], row["record_id_2"]]))
             feat_lookup[pair] = row
@@ -158,9 +158,9 @@ def main(
     else:
         if gray_zone_pairs is None:
             raise click.UsageError(
-                "--gray-zone-pairs required when predictions.csv lacks record_id columns"
+                "--gray-zone-pairs required when predictions lack record_id columns"
             )
-        gz_df = pd.read_csv(gray_zone_pairs)
+        gz_df = pd.read_parquet(gray_zone_pairs)
         if len(gz_df) != len(pred_df):
             logger.warning(
                 f"Row count mismatch: gray_zone_pairs={len(gz_df)}, predictions={len(pred_df)}"
@@ -183,11 +183,13 @@ def main(
     w_splink = gz_cfg.get("w_splink", 0.5)
     w_llm = gz_cfg.get("w_llm", 1.0)
     gz_threshold = gz_cfg.get("threshold", 0.0)
+    min_splink_prob = gz_cfg.get("min_splink_probability", 0.0)
 
     llm_pairs = set()
     llm_confidences = {}
     accepted = 0
     rejected = 0
+    rejected_floor = 0
 
     for rec in pred_records:
         pair = rec["pair"]
@@ -207,11 +209,22 @@ def main(
         # Get Splink match probability from features
         feat_row = feat_lookup.get(pair)
         if feat_row is not None and "match_probability" in feat_row.index:
-            s_logit = splink_logit(float(feat_row["match_probability"]))
+            splink_prob = float(feat_row["match_probability"])
+            s_logit = splink_logit(splink_prob)
             combined_logit = w_splink * s_logit + w_llm * llm_logit
         else:
-            # No Splink features available, use LLM only
+            splink_prob = None
             combined_logit = w_llm * llm_logit
+
+        # Reject if Splink probability is below floor (demographics say no match)
+        if (
+            min_splink_prob > 0
+            and splink_prob is not None
+            and splink_prob < min_splink_prob
+        ):
+            rejected += 1
+            rejected_floor += 1
+            continue
 
         if combined_logit >= gz_threshold:
             llm_pairs.add(pair)
@@ -222,7 +235,9 @@ def main(
 
     logger.info(
         f"Splink+LLM scoring (w_splink={w_splink}, w_llm={w_llm}, "
-        f"threshold={gz_threshold}): accepted={accepted}, rejected={rejected}"
+        f"threshold={gz_threshold}, min_splink_P={min_splink_prob}): "
+        f"accepted={accepted}, rejected={rejected} "
+        f"({rejected_floor} below Splink floor)"
     )
 
     # --- Step 3: Combine all matches ---
@@ -244,7 +259,7 @@ def main(
     golden_metrics = evaluate_golden_records(golden_records_df, ground_truth_df)
 
     # --- Step 7: Save outputs ---
-    golden_records_df.to_csv(out / "golden_records.csv", index=False)
+    golden_records_df.to_parquet(out / "golden_records.parquet", index=False)
 
     # Build all_matches.csv with source info
     match_rows = []
@@ -269,7 +284,7 @@ def main(
         )
 
     all_matches_df = pd.DataFrame(match_rows)
-    all_matches_df.to_csv(out / "all_matches.csv", index=False)
+    all_matches_df.to_parquet(out / "all_matches.parquet", index=False)
 
     # Combine metrics
     combined_metrics = {**eval_metrics, **golden_metrics}

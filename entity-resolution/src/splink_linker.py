@@ -31,16 +31,16 @@ def build_settings(config: dict) -> SettingsCreator:
     unable to estimate u/m probabilities, degrading calibration.
     """
     comparisons = [
-        cl.JaroWinklerAtThresholds(
-            "first_name", [0.92, 0.80]
-        ).configure(term_frequency_adjustments=True),
-        cl.JaroWinklerAtThresholds(
-            "last_name", [0.92, 0.80]
-        ).configure(term_frequency_adjustments=True),
+        cl.JaroWinklerAtThresholds("first_name", [0.92, 0.80]).configure(
+            term_frequency_adjustments=True
+        ),
+        cl.JaroWinklerAtThresholds("last_name", [0.92, 0.80]).configure(
+            term_frequency_adjustments=True
+        ),
         cl.JaroWinklerAtThresholds("address", [0.9, 0.7]),
-        cl.JaroWinklerAtThresholds(
-            "city", [0.9, 0.7]
-        ).configure(term_frequency_adjustments=True),
+        cl.JaroWinklerAtThresholds("city", [0.9, 0.7]).configure(
+            term_frequency_adjustments=True
+        ),
         cl.ExactMatch("zip"),
         cl.ExactMatch("ssn"),
         cl.DateOfBirthComparison("birthdate", input_is_string=True),
@@ -156,9 +156,7 @@ def predict_matches(linker: Linker, config: dict) -> pd.DataFrame:
     return results
 
 
-def classify_predictions(
-    predictions_df: pd.DataFrame, config: dict
-) -> tuple:
+def classify_predictions(predictions_df: pd.DataFrame, config: dict) -> tuple:
     """Split Splink predictions into auto_match / gray_zone / auto_reject.
 
     Args:
@@ -176,10 +174,12 @@ def classify_predictions(
 
     # Normalize column names: Splink uses record_id_l/r, we want record_id_1/2
     df = predictions_df.copy()
-    df = df.rename(columns={
-        "record_id_l": "record_id_1",
-        "record_id_r": "record_id_2",
-    })
+    df = df.rename(
+        columns={
+            "record_id_l": "record_id_1",
+            "record_id_r": "record_id_2",
+        }
+    )
 
     # For backward compat, map match_probability to total_score
     df["total_score"] = df["match_probability"]
@@ -263,12 +263,9 @@ def evaluate_splink_only(
     }
 
     logger.info(
-        f"Splink-only auto-match F1={f1_auto:.4f} "
-        f"(P={p_auto:.4f}, R={r_auto:.4f})"
+        f"Splink-only auto-match F1={f1_auto:.4f} (P={p_auto:.4f}, R={r_auto:.4f})"
     )
-    logger.info(
-        f"Splink-only best threshold={best_thresh:.2f}, F1={best_f1:.4f}"
-    )
+    logger.info(f"Splink-only best threshold={best_thresh:.2f}, F1={best_f1:.4f}")
 
     return metrics
 

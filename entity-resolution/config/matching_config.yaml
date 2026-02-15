@@ -12,6 +12,7 @@ gray_zone:
   w_splink: 0.5     # weight on Splink log-odds
   w_llm: 1.0        # weight on LLM log-odds
   threshold: 0.0     # combined logit threshold (0.0 = 50/50 odds)
+  min_splink_probability: 0.3  # floor: reject LLM match if Splink P < this
 
 # Golden record creation
 golden_record:
