@@ -10,14 +10,16 @@ The resulting model:
   - Doesn't require the peft library to load
   - Loads via AutoModelForSequenceClassification.from_pretrained()
 
-Usage (on a GPU with >=16GB VRAM):
-    python export_text_only_model.py
-    python export_text_only_model.py --validate          # also run test set eval
-    python export_text_only_model.py --no-push --local-dir ./merged-model
+Usage:
+    python export_model.py                        # merge + push (CPU-only, no GPU needed)
+    python export_model.py --validate             # also run test set eval on GPU
+    python export_model.py --no-push --local-dir ./merged-model
 """
 
 import argparse
+import gc
 import json
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -29,8 +31,23 @@ OUTPUT_REPO = "abicyclerider/medgemma-4b-entity-resolution-text-only"
 DATASET_REPO = "abicyclerider/entity-resolution-pairs"
 
 
+def log_memory(label):
+    """Log GPU and system memory usage."""
+    if torch.cuda.is_available():
+        alloc = torch.cuda.memory_allocated() / 1e9
+        reserved = torch.cuda.memory_reserved() / 1e9
+        total = torch.cuda.get_device_properties(0).total_memory / 1e9
+        print(f"  [{label}] GPU: {alloc:.1f}GB allocated, {reserved:.1f}GB reserved / {total:.1f}GB total")
+    try:
+        import resource
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6  # GB on Linux
+        print(f"  [{label}] CPU RSS: {rss:.1f}GB")
+    except Exception:
+        pass
+
+
 def merge_adapter(base_model_id, adapter_repo):
-    """Load text-only base model + LoRA adapter, merge, return merged model."""
+    """Load text-only base model + LoRA adapter, merge on CPU, return merged model."""
     from peft import PeftModel
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -40,20 +57,25 @@ def merge_adapter(base_model_id, adapter_repo):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load text-only base model in bf16 (no quantization — need full precision for clean merge)
-    print(f"Loading {base_model_id} in bf16...")
+    log_memory("after tokenizer")
+
+    # Load text-only base model in bf16 on CPU (merge is just weight arithmetic, no GPU needed)
+    print(f"Loading {base_model_id} in bf16 on CPU...")
     model = AutoModelForSequenceClassification.from_pretrained(
         base_model_id,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        device_map="cpu",
+        low_cpu_mem_usage=True,
     )
     model.config.pad_token_id = tokenizer.pad_token_id
     print(f"Base model type: {type(model).__name__}")
     print(f"Base model params: {sum(p.numel() for p in model.parameters()):,}")
+    log_memory("after base model load")
 
     # Apply LoRA adapter
     print(f"\nApplying LoRA adapter from {adapter_repo}...")
     model = PeftModel.from_pretrained(model, adapter_repo)
+    log_memory("after LoRA apply")
 
     # Merge LoRA into base weights
     print("Merging LoRA weights into base model...")
@@ -61,6 +83,7 @@ def merge_adapter(base_model_id, adapter_repo):
     model.eval()
     print(f"Merged model type: {type(model).__name__}")
     print(f"Merged model params: {sum(p.numel() for p in model.parameters()):,}")
+    log_memory("after merge")
 
     return model, tokenizer
 
@@ -171,27 +194,40 @@ def main():
     )
     args = parser.parse_args()
 
-    if not torch.cuda.is_available():
-        print("ERROR: CUDA required for bf16 model loading.")
-        sys.exit(1)
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
+        print(f"GPU: {gpu_name} ({gpu_mem:.1f} GB)")
+    else:
+        print("No GPU detected — merge will run on CPU only.")
+        if args.validate:
+            print("ERROR: --validate requires CUDA GPU.")
+            sys.exit(1)
+    log_memory("startup")
 
-    gpu_name = torch.cuda.get_device_name(0)
-    gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
-    print(f"GPU: {gpu_name} ({gpu_mem:.1f} GB)")
+    # Clean HF cache to maximize disk space
+    cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+    print(f"HF cache dir: {cache_dir}")
 
-    # Merge adapter
+    # Merge adapter on CPU
     model, tokenizer = merge_adapter(BASE_MODEL_ID, ADAPTER_REPO)
 
-    # Validate
+    # Validate (requires GPU)
     test_metrics = {}
     if args.validate:
+        print("\nMoving model to GPU for validation...")
+        model = model.to("cuda")
+        log_memory("after move to GPU")
         test_metrics = validate_on_test(model, tokenizer, batch_size=args.batch_size)
+        model = model.to("cpu")
+        torch.cuda.empty_cache()
 
     # Save locally
     print(f"\nSaving merged model to {args.local_dir}...")
     model.save_pretrained(args.local_dir)
     tokenizer.save_pretrained(args.local_dir)
     print("Saved.")
+    log_memory("after save")
 
     # Save export_info.json (gets pushed to HF Hub with the model)
     total_params = sum(p.numel() for p in model.parameters())
@@ -208,30 +244,27 @@ def main():
         json.dump(export_info, f, indent=2)
     print(f"Export info saved to: {export_info_path}")
 
-    # Verify it loads cleanly via Auto class
-    print("\nVerifying Auto class loading...")
-    from transformers import AutoModelForSequenceClassification
-
-    reloaded = AutoModelForSequenceClassification.from_pretrained(
-        args.local_dir,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-    )
-    print(f"  Reloaded type: {type(reloaded).__name__}")
-    print(f"  Reloaded params: {sum(p.numel() for p in reloaded.parameters()):,}")
-    del reloaded
+    # Free model from memory before upload to reduce peak memory
+    del model
+    gc.collect()
     torch.cuda.empty_cache()
+    log_memory("after model freed")
 
-    # Push to Hub
+    # Clean HF cache to free disk space for upload
+    import shutil
+    if os.path.exists(cache_dir):
+        print(f"Cleaning HF cache ({cache_dir})...")
+        shutil.rmtree(cache_dir, ignore_errors=True)
+
+    # Push to Hub using upload_folder (model already saved to disk)
     if not args.no_push:
-        from huggingface_hub import upload_file
+        from huggingface_hub import HfApi
 
+        api = HfApi()
         print(f"\nPushing to {args.output_repo} (private)...")
-        model.push_to_hub(args.output_repo, private=True)
-        tokenizer.push_to_hub(args.output_repo, private=True)
-        upload_file(
-            path_or_fileobj=export_info_path,
-            path_in_repo="export_info.json",
+        api.create_repo(args.output_repo, private=True, exist_ok=True)
+        api.upload_folder(
+            folder_path=args.local_dir,
             repo_id=args.output_repo,
         )
         print("Done! Model + export info available on HF Hub.")

@@ -33,9 +33,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY prepare_base_model.py \
-     train_classifier_on_gpu.py \
-     export_text_only_model.py \
-     inference_classifier.py \
+     train_classifier.py \
+     export_model.py \
+     infer_classifier.py \
      ./
 
 CMD ["sleep", "infinity"]

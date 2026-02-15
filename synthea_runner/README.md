@@ -24,8 +24,8 @@ git submodule update --init --recursive
 ### 2. Generate Synthetic Patients
 
 ```bash
-# From synthea-runner directory
-cd synthea-runner
+# From synthea_runner directory
+cd synthea_runner
 docker compose up
 
 # Output will be created in: ./output/synthea_raw/csv/
@@ -82,7 +82,7 @@ See [Synthea Configuration Guide](https://github.com/synthetichealth/synthea/wik
 ## Directory Structure
 
 ```
-synthea-runner/
+synthea_runner/
 ├── docker-compose.yml             # Docker Compose service definition
 ├── config/
 │   └── synthea.properties         # Synthea configuration

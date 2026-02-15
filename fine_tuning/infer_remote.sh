@@ -17,6 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_remote_helpers.sh"
 
+# Note: HF Hub repos use "grey" spelling (external resource, can't rename)
 HF_INPUT_REPO="abicyclerider/grey-zone-pairs"
 HF_OUTPUT_REPO="abicyclerider/grey-zone-predictions"
 POLL_INTERVAL=30
@@ -53,7 +54,7 @@ if [[ "$LOCAL_MODE" == "true" ]]; then
     echo "Input: $INPUT_FILE"
     mkdir -p "$(dirname "$OUTPUT_FILE")"
 
-    if ! python3 "$SCRIPT_DIR/inference_classifier.py" \
+    if ! python3 "$SCRIPT_DIR/infer_classifier.py" \
         --input-file "$INPUT_FILE" \
         --output-file "$OUTPUT_FILE" \
         --no-quantize; then
@@ -101,7 +102,7 @@ print(f'  Uploaded {len(df)} rows')
 fi
 
 # --- Steps 2-3: Launch pod and poll (with retry on stall/failure) ---
-LAUNCH_CMD="\"$SCRIPT_DIR/run_on_runpod.sh\" infer --gpu-type \"$GPU_TYPE\" --hf-input \"$HF_INPUT_REPO\" --hf-output \"$HF_OUTPUT_REPO\""
+LAUNCH_CMD="\"$SCRIPT_DIR/launch_pod.sh\" infer --gpu-type \"$GPU_TYPE\" --hf-input \"$HF_INPUT_REPO\" --hf-output \"$HF_OUTPUT_REPO\""
 poll_pod "$LAUNCH_CMD" "$TIMEOUT" "$STALL_TIMEOUT" "$MAX_RETRIES" "$POLL_INTERVAL"
 
 # --- Step 4: Download predictions from HF Hub ---

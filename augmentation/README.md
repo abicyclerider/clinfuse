@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ```bash
 python -m augmentation.cli.augment \
-  --input synthea-runner/output/synthea_raw/csv \
+  --input synthea_runner/output/synthea_raw/csv \
   --output output/augmented \
   --config augmentation/config/default_config.yaml
 ```

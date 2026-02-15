@@ -16,12 +16,11 @@ from pathlib import Path
 import click
 import pandas as pd
 import yaml
-from src.data_loader import create_record_id
-from src.evaluation import evaluate_golden_records, evaluate_matches
-from src.golden_record import create_golden_records
-from src.splink_linker import splink_logit
 
-from shared.data_loader import load_facility_patients
+from entity_resolution.core.evaluation import evaluate_golden_records, evaluate_matches
+from entity_resolution.core.golden_record import create_golden_records
+from entity_resolution.core.splink_linker import splink_logit
+from shared.data_loader import create_record_id, load_facility_patients
 from shared.ground_truth import (
     add_record_ids_to_ground_truth,
     load_ground_truth,

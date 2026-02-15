@@ -6,7 +6,8 @@ import math
 
 import pandas as pd
 import pytest
-from src.splink_linker import (
+
+from entity_resolution.core.splink_linker import (
     build_settings,
     classify_predictions,
     create_linker,

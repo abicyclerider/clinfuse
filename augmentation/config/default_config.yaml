@@ -38,7 +38,7 @@ error_injection:
 
 # Paths (will be set via CLI or programmatically)
 paths:
-  input_dir: "synthea-runner/output/synthea_raw/csv"
+  input_dir: "synthea_runner/output/synthea_raw/csv"
   output_dir: "output/augmented"
 
 # Random seed for reproducibility

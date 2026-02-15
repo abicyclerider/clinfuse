@@ -15,9 +15,9 @@ Fine-tuned MedGemma 4B (text-only) for pairwise patient entity resolution on Syn
 |-------|--------|-------------|
 | 1. Prepare dataset | `prepare_dataset.py` | Load Synthea data, generate Strategy D summaries, build balanced splits, push to HF Hub |
 | 2. Prepare base model | `prepare_base_model.py` | Strip vision tower from `google/medgemma-4b-it`, push text-only base to HF Hub (one-time, CPU) |
-| 3. Train | `train_classifier_on_gpu.py` | QLoRA fine-tuning on text-only base (H100 ~2.2h, L40S needs gradient checkpointing) |
-| 4. Export | `export_text_only_model.py` | Merge LoRA adapter into base, upload merged model |
-| 5. Infer | `inference_classifier.py` | Batch inference & evaluation on test set, custom CSV, or HF Hub dataset |
+| 3. Train | `train_classifier.py` | QLoRA fine-tuning on text-only base (H100 ~2.2h, L40S needs gradient checkpointing) |
+| 4. Export | `export_model.py` | Merge LoRA adapter into base, upload merged model |
+| 5. Infer | `infer_classifier.py` | Batch inference & evaluation on test set, custom CSV, or HF Hub dataset |
 
 ## Quick Start
 
@@ -29,19 +29,19 @@ python prepare_dataset.py
 python prepare_base_model.py
 
 # 3. Train on GPU (see RUNPOD_GUIDE.md for cloud setup)
-python train_classifier_on_gpu.py
+python train_classifier.py
 
 # 4. Export merged model
-python export_text_only_model.py
+python export_model.py
 
 # 5. Evaluate on HF test split
-python inference_classifier.py --dataset
+python infer_classifier.py --dataset
 
 # 5b. Classify a custom CSV (must have a 'text' column)
-python inference_classifier.py --input-csv pairs.csv --output-csv predictions.csv
+python infer_classifier.py --input-csv pairs.csv --output-csv predictions.csv
 
 # 5c. HF Hub round-trip (for remote GPU — RunPod, Vertex AI)
-python inference_classifier.py \
+python infer_classifier.py \
     --hf-input abicyclerider/grey-zone-pairs \
     --hf-output abicyclerider/grey-zone-predictions
 ```
@@ -57,19 +57,19 @@ docker build -t medgemma .
 docker run -e HF_TOKEN=hf_... medgemma python prepare_base_model.py
 
 # Train (GPU)
-docker run --gpus all -e HF_TOKEN=hf_... medgemma python train_classifier_on_gpu.py --epochs 3
+docker run --gpus all -e HF_TOKEN=hf_... medgemma python train_classifier.py --epochs 3
 
 # Export (GPU)
-docker run --gpus all -e HF_TOKEN=hf_... medgemma python export_text_only_model.py --validate
+docker run --gpus all -e HF_TOKEN=hf_... medgemma python export_model.py --validate
 
 # Infer (GPU)
-docker run --gpus all -e HF_TOKEN=hf_... medgemma python inference_classifier.py --dataset
+docker run --gpus all -e HF_TOKEN=hf_... medgemma python infer_classifier.py --dataset
 ```
 
 ## Local Setup (without Docker)
 
 ```bash
-cd fine-tuning
+cd fine_tuning
 python3 -m venv .venv
 source .venv/bin/activate
 pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
@@ -78,10 +78,10 @@ pip install -r requirements.txt
 
 ## Remote GPU on RunPod
 
-The `run_on_runpod.sh` script launches any pipeline stage on a RunPod GPU pod. It uses HF Hub as the data bridge — no SSH or file copying needed.
+The `launch_pod.sh` script launches any pipeline stage on a RunPod GPU pod. It uses HF Hub as the data bridge — no SSH or file copying needed.
 
 ```bash
-# 1. Upload grey zone pairs to HF Hub
+# 1. Upload gray zone pairs to HF Hub (note: HF repo uses "grey" spelling)
 python -c "
 from datasets import Dataset
 import pandas as pd
@@ -90,8 +90,8 @@ Dataset.from_pandas(df).push_to_hub('abicyclerider/grey-zone-pairs')
 "
 
 # 2. Launch inference on RunPod (fire and forget)
-cd fine-tuning
-./run_on_runpod.sh infer \
+cd fine_tuning
+./launch_pod.sh infer \
     --hf-input abicyclerider/grey-zone-pairs \
     --hf-output abicyclerider/grey-zone-predictions
 
@@ -109,14 +109,14 @@ dvc repro golden_records
 Override GPU type (default: NVIDIA L40S):
 
 ```bash
-./run_on_runpod.sh infer --gpu-type "NVIDIA A100 80GB PCIe" \
+./launch_pod.sh infer --gpu-type "NVIDIA A100 80GB PCIe" \
     --hf-input abicyclerider/grey-zone-pairs \
     --hf-output abicyclerider/grey-zone-predictions
 ```
 
 Prerequisites:
 - `runpodctl` configured (`~/.runpod/config.toml` with API key)
-- `HF_TOKEN` in `fine-tuning/.env`
+- `HF_TOKEN` in `fine_tuning/.env`
 - GHCR package set to public (`gh api -X PUT /user/packages/container/medgemma-pipeline/visibility -f visibility=public`)
 
 See [`RUNPOD_GUIDE.md`](RUNPOD_GUIDE.md) for SSH-based provisioning and manual training commands.

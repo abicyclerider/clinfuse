@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install mypy pandas-stubs types-PyYAML types-python-dateutil
-      - run: mypy shared/ augmentation/ entity_resolution/src/
+      - run: mypy shared/ augmentation/ entity_resolution/core/
 
   test-augmentation:
     runs-on: ubuntu-latest
@@ -59,8 +59,8 @@ jobs:
       matrix:
         include:
           - name: synthea
-            dockerfile: synthea-runner/synthea-docker/Dockerfile
-            context: synthea-runner/synthea-docker
+            dockerfile: synthea_runner/synthea-docker/Dockerfile
+            context: synthea_runner/synthea-docker
           - name: augmentation
             dockerfile: augmentation/Dockerfile
             context: augmentation
@@ -87,8 +87,8 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
-          context: fine-tuning
-          file: fine-tuning/Dockerfile
+          context: fine_tuning
+          file: fine_tuning/Dockerfile
           push: false
           cache-from: type=gha,scope=medgemma-pipeline
           cache-to: type=gha,mode=max,scope=medgemma-pipeline
@@ -112,8 +112,8 @@ jobs:
   #         password: ${{ secrets.GITHUB_TOKEN }}
   #     - uses: docker/build-push-action@v6
   #       with:
-  #         context: fine-tuning
-  #         file: fine-tuning/Dockerfile
+  #         context: fine_tuning
+  #         file: fine_tuning/Dockerfile
   #         push: true
   #         tags: |
   #           ghcr.io/abicyclerider/medgemma-pipeline:latest

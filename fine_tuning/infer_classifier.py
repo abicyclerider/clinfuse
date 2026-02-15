@@ -18,6 +18,7 @@ Usage:
     python inference_classifier.py --input-file gray_zone.parquet --output-file predictions.parquet
 
     # HF Hub round-trip (for remote GPU inference on RunPod / Vertex AI)
+    # Note: HF Hub repos use "grey" spelling (external resource, can't rename)
     python inference_classifier.py \
         --hf-input abicyclerider/grey-zone-pairs \
         --hf-output abicyclerider/grey-zone-predictions
@@ -375,7 +376,7 @@ def main():
     mode.add_argument(
         "--hf-input",
         type=str,
-        help="HF Hub dataset repo to load as input (e.g. abicyclerider/grey-zone-pairs)",
+        help="HF Hub dataset repo to load as input (e.g. abicyclerider/grey-zone-pairs)",  # "grey" spelling in HF repo name
     )
 
     # Options

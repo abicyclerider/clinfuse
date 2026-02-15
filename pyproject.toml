@@ -8,13 +8,13 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["shared*", "augmentation*"]
+include = ["shared*", "augmentation*", "entity_resolution*"]
 exclude = ["augmentation.tests*"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 88
-extend-exclude = ["fine-tuning", "synthea-runner"]
+extend-exclude = ["fine_tuning", "synthea_runner"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

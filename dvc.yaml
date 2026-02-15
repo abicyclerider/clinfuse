@@ -4,11 +4,11 @@ vars:
 stages:
   generate:
     cmd: >-
-      rm -rf synthea-runner/output/synthea_raw &&
-      docker build -t synthea synthea-runner/synthea-docker/ &&
+      rm -rf synthea_runner/output/synthea_raw &&
+      docker build -t synthea synthea_runner/synthea-docker/ &&
       docker run --rm
       -e JAVA_OPTS=-Xmx8g
-      -v $(pwd)/synthea-runner/output/synthea_raw:/synthea/synthea/output
+      -v $(pwd)/synthea_runner/output/synthea_raw:/synthea/synthea/output
       synthea
       /bin/sh -c "./run_synthea -p ${generate.population} -s ${generate.seed}
       --exporter.baseDirectory=./output --exporter.csv.export=true
@@ -17,9 +17,9 @@ stages:
     - generate.population
     - generate.seed
     deps:
-    - synthea-runner/synthea-docker/Dockerfile
+    - synthea_runner/synthea-docker/Dockerfile
     outs:
-    - synthea-runner/output/synthea_raw/csv:
+    - synthea_runner/output/synthea_raw/csv:
         cache: false
 
   augment:
@@ -27,7 +27,7 @@ stages:
       rm -rf output/augmented &&
       docker build -t augmentation augmentation/ &&
       docker run --rm
-      -v $(pwd)/synthea-runner/output/synthea_raw/csv:/data/input:ro
+      -v $(pwd)/synthea_runner/output/synthea_raw/csv:/data/input:ro
       -v $(pwd)/output/augmented:/data/output
       augmentation
       --input /data/input
@@ -36,7 +36,7 @@ stages:
     params:
     - augment.random_seed
     deps:
-    - synthea-runner/output/synthea_raw/csv
+    - synthea_runner/output/synthea_raw/csv
     - augmentation/Dockerfile
     - augmentation/requirements-runtime.txt
     - augmentation/cli/augment.py
@@ -53,7 +53,7 @@ stages:
       -v $(pwd)/output/augmented:/data/augmented:ro
       -v $(pwd)/output/resolved:/data/resolved
       entity_resolution
-      python entity_resolution/resolve.py
+      python -m entity_resolution.resolve
       --augmented-dir /data/augmented
       --output-dir /data/resolved
       --config entity_resolution/config/matching_config.yaml
@@ -64,7 +64,7 @@ stages:
     - output/augmented
     - entity_resolution/Dockerfile
     - entity_resolution/resolve.py
-    - entity_resolution/src/
+    - entity_resolution/core/
     - entity_resolution/config/matching_config.yaml
     - entity_resolution/requirements-runtime.txt
     - shared/
@@ -76,16 +76,16 @@ stages:
     cmd: >-
       rm -rf output/inferred &&
       mkdir -p output/inferred &&
-      fine-tuning/infer_remote.sh
+      fine_tuning/infer_remote.sh
       output/resolved/gray_zone_pairs.parquet
       output/inferred/predictions.parquet
     deps:
-    - fine-tuning/Dockerfile
-    - fine-tuning/_remote_helpers.sh
-    - fine-tuning/infer_remote.sh
-    - fine-tuning/inference_classifier.py
-    - fine-tuning/requirements.txt
-    - fine-tuning/run_on_runpod.sh
+    - fine_tuning/Dockerfile
+    - fine_tuning/_remote_helpers.sh
+    - fine_tuning/infer_remote.sh
+    - fine_tuning/infer_classifier.py
+    - fine_tuning/requirements.txt
+    - fine_tuning/launch_pod.sh
     - output/resolved/gray_zone_pairs.parquet
     outs:
     - output/inferred/predictions.parquet:
@@ -100,7 +100,7 @@ stages:
       -v $(pwd)/output/inferred:/data/inferred:ro
       -v $(pwd)/output/golden_records:/data/golden_records
       entity_resolution
-      python entity_resolution/build_golden_records.py
+      python -m entity_resolution.build_golden_records
       --augmented-dir /data/augmented
       --auto-matches /data/resolved/auto_matches.parquet
       --predictions /data/inferred/predictions.parquet
@@ -113,7 +113,7 @@ stages:
     - output/inferred/predictions.parquet
     - output/augmented
     - entity_resolution/build_golden_records.py
-    - entity_resolution/src/
+    - entity_resolution/core/
     - shared/
     outs:
     - output/golden_records:
@@ -122,7 +122,7 @@ stages:
   generate_training:
     cmd: >-
       rm -rf output/training/synthea_raw &&
-      docker build -t synthea synthea-runner/synthea-docker/ &&
+      docker build -t synthea synthea_runner/synthea-docker/ &&
       docker run --rm
       -e JAVA_OPTS=-Xmx8g
       -v $(pwd)/output/training/synthea_raw:/synthea/synthea/output
@@ -134,7 +134,7 @@ stages:
     - generate_training.population
     - generate_training.seed
     deps:
-    - synthea-runner/synthea-docker/Dockerfile
+    - synthea_runner/synthea-docker/Dockerfile
     outs:
     - output/training/synthea_raw/csv:
         cache: false
@@ -166,7 +166,7 @@ stages:
     cmd: >-
       rm -rf output/training/dataset &&
       mkdir -p output/training/dataset &&
-      python fine-tuning/prepare_dataset.py
+      python fine_tuning/prepare_dataset.py
       --augmented-dir output/training/augmented
       --output-dir output/training/dataset
       --seed ${prepare_dataset.seed}
@@ -174,7 +174,7 @@ stages:
     - prepare_dataset.seed
     deps:
     - output/training/augmented
-    - fine-tuning/prepare_dataset.py
+    - fine_tuning/prepare_dataset.py
     - shared/summarize.py
     - shared/data_loader.py
     - shared/ground_truth.py
@@ -187,7 +187,7 @@ stages:
     cmd: >-
       rm -rf output/training/train &&
       mkdir -p output/training/train &&
-      fine-tuning/train_remote.sh
+      fine_tuning/train_remote.sh
       --gpu-type "NVIDIA H100 80GB HBM3"
       output/training/train
       --
@@ -204,12 +204,12 @@ stages:
     - train.lora_r
     deps:
     - output/training/dataset/dataset_info.json
-    - fine-tuning/train_classifier_on_gpu.py
-    - fine-tuning/train_remote.sh
-    - fine-tuning/_remote_helpers.sh
-    - fine-tuning/run_on_runpod.sh
-    - fine-tuning/Dockerfile
-    - fine-tuning/requirements.txt
+    - fine_tuning/train_classifier.py
+    - fine_tuning/train_remote.sh
+    - fine_tuning/_remote_helpers.sh
+    - fine_tuning/launch_pod.sh
+    - fine_tuning/Dockerfile
+    - fine_tuning/requirements.txt
     outs:
     - output/training/train/train_metrics.json:
         cache: false
@@ -218,17 +218,17 @@ stages:
     cmd: >-
       rm -rf output/training/export &&
       mkdir -p output/training/export &&
-      fine-tuning/export_remote.sh
+      fine_tuning/export_remote.sh
       --gpu-type "NVIDIA H100 80GB HBM3"
       output/training/export
     deps:
     - output/training/train/train_metrics.json
-    - fine-tuning/export_text_only_model.py
-    - fine-tuning/export_remote.sh
-    - fine-tuning/_remote_helpers.sh
-    - fine-tuning/run_on_runpod.sh
-    - fine-tuning/Dockerfile
-    - fine-tuning/requirements.txt
+    - fine_tuning/export_model.py
+    - fine_tuning/export_remote.sh
+    - fine_tuning/_remote_helpers.sh
+    - fine_tuning/launch_pod.sh
+    - fine_tuning/Dockerfile
+    - fine_tuning/requirements.txt
     outs:
     - output/training/export/export_info.json:
         cache: false

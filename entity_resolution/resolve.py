@@ -17,16 +17,15 @@ import click
 import numpy as np
 import pandas as pd
 import yaml
-from src.data_loader import create_record_id
-from src.splink_linker import (
+
+from entity_resolution.core.splink_linker import (
     classify_predictions,
     create_linker,
     evaluate_splink_only,
     predict_matches,
     train_model,
 )
-
-from shared.data_loader import load_facility_patients
+from shared.data_loader import create_record_id, load_facility_patients
 from shared.ground_truth import (
     add_record_ids_to_ground_truth,
     generate_true_pairs_from_ground_truth,

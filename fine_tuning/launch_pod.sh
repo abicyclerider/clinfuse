@@ -2,11 +2,11 @@
 # Launch a fine-tuning pipeline stage on RunPod GPU.
 #
 # Usage:
-#   ./run_on_runpod.sh infer --hf-input abicyclerider/grey-zone-pairs --hf-output abicyclerider/grey-zone-predictions
-#   ./run_on_runpod.sh train --epochs 3 --batch-size 4
-#   ./run_on_runpod.sh export --validate
+#   ./launch_pod.sh infer --hf-input abicyclerider/grey-zone-pairs --hf-output abicyclerider/grey-zone-predictions  # "grey" spelling in HF repo names
+#   ./launch_pod.sh train --epochs 3 --batch-size 4
+#   ./launch_pod.sh export --validate
 #
-# Reads HF_TOKEN from fine-tuning/.env and RUNPOD_API_KEY from ~/.runpod/config.toml.
+# Reads HF_TOKEN from .env (same directory) and RUNPOD_API_KEY from ~/.runpod/config.toml.
 # Creates a pod via the RunPod GraphQL API with the GHCR Docker image.
 # The pod auto-stops after the script finishes (via RUNPOD_POD_ID + RUNPOD_API_KEY env vars).
 
@@ -28,9 +28,9 @@ STAGE="$1"
 shift
 
 case "$STAGE" in
-    infer)  SCRIPT="inference_classifier.py" ;;
-    train)  SCRIPT="train_classifier_on_gpu.py" ;;
-    export) SCRIPT="export_text_only_model.py" ;;
+    infer)  SCRIPT="infer_classifier.py" ;;
+    train)  SCRIPT="train_classifier.py" ;;
+    export) SCRIPT="export_model.py" ;;
     *)
         echo "Unknown stage: $STAGE"
         echo "Valid stages: infer, train, export"

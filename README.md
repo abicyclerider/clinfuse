@@ -10,20 +10,63 @@ Generate synthetic patient data, augment it with realistic errors and duplicates
 
 ```
 SyntheticMass/
-├── synthea-runner/       # Synthea patient data generation (Docker)
-├── augmentation/         # Error injection, duplicates, ground truth labels
-├── entity_resolution/    # Blocking, candidate pair generation, classification
-├── fine-tuning/          # MedGemma 4B QLoRA training & evaluation
-├── shared/               # Shared utilities (summarizer, etc.)
-└── README.md
+├── synthea_runner/          # Synthea patient data generation (Docker submodule)
+├── augmentation/            # Error injection, duplicates, ground truth labels
+├── entity_resolution/       # Splink blocking, pair generation, golden records
+│   └── core/                # Core algorithms (splink_linker, golden_record, evaluation)
+├── fine_tuning/             # MedGemma 4B QLoRA training & inference
+├── shared/                  # Shared utilities (data_loader, summarizer, ground_truth)
+├── output/                  # DVC-managed pipeline outputs (gitignored)
+├── dvc.yaml                 # Pipeline definition (10 stages)
+├── params.yaml              # Pipeline parameters
+└── pyproject.toml           # Python project config (ruff, mypy, pytest)
 ```
 
-## Workflow
+## DVC Pipeline
 
-1. **Generate** — `synthea-runner/` creates 10K synthetic patients via [Synthea](https://github.com/synthetichealth/synthea)
-2. **Augment** — `augmentation/` injects typos, formatting changes, missing fields, and duplicates with ground-truth labels
-3. **Block & Pair** — `entity_resolution/` applies rule-based blocking to reduce the candidate space, then generates record pairs
-4. **Classify** — Fine-tuned MedGemma 4B text-only classifier scores each pair as match/non-match
+The pipeline is managed by [DVC](https://dvc.org/) and defined in `dvc.yaml`. Parameters are in `params.yaml`.
+
+**Inference track** (main pipeline):
+
+```
+generate → augment → resolve → infer → golden_records
+```
+
+1. **generate** — Run Synthea to create synthetic patient CSVs
+2. **augment** — Inject errors, distribute patients across facilities, create ground truth
+3. **resolve** — Splink probabilistic linkage: auto-matches + gray zone pairs with LLM text
+4. **infer** — MedGemma classifier scores gray zone pairs (RunPod GPU)
+5. **golden_records** — Combine auto-matches + LLM predictions into final golden records, evaluate
+
+**Training track** (model fine-tuning):
+
+```
+generate_training → augment_training → prepare_dataset → train → export
+```
+
+6. **generate_training** — Separate Synthea run (different seed/population)
+7. **augment_training** — Augment training data
+8. **prepare_dataset** — Build HuggingFace dataset with Strategy D summaries
+9. **train** — QLoRA fine-tuning on RunPod GPU
+10. **export** — Merge LoRA adapter into base model, push to HF Hub
+
+### Quick Start
+
+```bash
+# Install Python dependencies
+pip install -e .
+
+# Run the full inference pipeline
+dvc repro golden_records
+
+# Run a single stage
+dvc repro resolve
+
+# View the pipeline DAG
+dvc dag
+```
+
+GPU stages (infer, train, export) run on [RunPod](https://www.runpod.io/) via automated scripts. See [`fine_tuning/README.md`](fine_tuning/README.md) for details.
 
 ## Key Results
 
@@ -37,19 +80,20 @@ Model on HuggingFace: [`abicyclerider/medgemma-4b-entity-resolution-text-only`](
 
 ### Prerequisites
 
-- **Docker** — for Synthea data generation
-- **Python 3.11+** — for augmentation, entity resolution, and analysis
-- **GPU (48GB+ VRAM)** — for fine-tuning (H100 or L40S recommended)
+- **Docker** — for Synthea data generation and entity resolution
+- **Python 3.11+** — for augmentation, entity resolution, and dataset preparation
+- **GPU (48GB+ VRAM)** — for fine-tuning and inference (H100 or L40S recommended)
+- **DVC** — for pipeline orchestration (`pip install dvc`)
 
 ### Generate Base Data
 
 ```bash
 git submodule update --init --recursive
-cd synthea-runner
+cd synthea_runner
 docker compose up
 ```
 
-See [`synthea-runner/README.md`](synthea-runner/README.md) for configuration details.
+See [`synthea_runner/README.md`](synthea_runner/README.md) for configuration details.
 
 ## License
 

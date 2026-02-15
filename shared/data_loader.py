@@ -125,6 +125,21 @@ def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def create_record_id(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create a unique record identifier for each patient-facility combination.
+
+    Args:
+        df: Patient DataFrame with facility_id and id columns
+
+    Returns:
+        DataFrame with added record_id column
+    """
+    df = df.copy()
+    df["record_id"] = df["facility_id"] + "_" + df["id"].astype(str)
+    return df
+
+
 def get_run_directory(base_dir: str, run_id: str) -> Path:
     """
     Get the full path to a run directory.

@@ -1,5 +1,5 @@
 output/
-synthea-runner/output/
+synthea_runner/output/
 .git/
 .venv/
 __pycache__/
