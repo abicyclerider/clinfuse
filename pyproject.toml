@@ -20,8 +20,6 @@ extend-exclude = ["fine-tuning", "synthea-runner"]
 select = ["E", "F", "W", "I"]
 ignore = ["E501", "E712"]
 
-[tool.ruff.lint.per-file-ignores]
-"analysis/*" = ["E", "F", "W", "I"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -15,7 +15,6 @@ SyntheticMass/
 ├── entity_resolution/    # Blocking, candidate pair generation, classification
 ├── fine-tuning/          # MedGemma 4B QLoRA training & evaluation
 ├── shared/               # Shared utilities (summarizer, etc.)
-├── analysis/             # Exploratory notebooks
 └── README.md
 ```
 
