@@ -331,9 +331,7 @@ def run_augmentation_pipeline(
                 console.print("[green]✓[/green] All validations passed")
 
         # Write metadata
-        task_meta = progress.add_task(
-            "[cyan]Writing metadata...", total=5
-        )
+        task_meta = progress.add_task("[cyan]Writing metadata...", total=5)
 
         metadata_dir = output_dir / "metadata"
         metadata_dir.mkdir(parents=True, exist_ok=True)
