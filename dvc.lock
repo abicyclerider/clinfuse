@@ -1,0 +1,444 @@
+schema: '2.0'
+stages:
+  generate:
+    cmd: rm -rf synthea_runner/output/synthea_raw && docker build -t synthea 
+      synthea_runner/synthea-docker/ && docker run --rm -e JAVA_OPTS=-Xmx8g -v 
+      $(pwd)/synthea_runner/output/synthea_raw:/synthea/synthea/output synthea 
+      /bin/sh -c "./run_synthea -p 500 -s 67890 
+      --exporter.baseDirectory=./output --exporter.csv.export=true 
+      --exporter.fhir.export=false Massachusetts"
+    deps:
+    - path: synthea_runner/synthea-docker/Dockerfile
+      hash: md5
+      md5: 1369d1d9cd02662b7bf3fe723a265ca1
+      size: 1433
+    params:
+      params.yaml:
+        generate.population: 500
+        generate.seed: 67890
+    outs:
+    - path: synthea_runner/output/synthea_raw/csv
+      hash: md5
+      md5: eb4a4f84ccccc551f7ccd5f897304ad5.dir
+      size: 453860043
+      nfiles: 18
+  augment:
+    cmd: rm -rf output/augmented && docker build -t augmentation augmentation/ 
+      && docker run --rm -v 
+      $(pwd)/synthea_runner/output/synthea_raw/csv:/data/input:ro -v 
+      $(pwd)/output/augmented:/data/output augmentation --input /data/input 
+      --output /data/output --random-seed 99
+    deps:
+    - path: augmentation/Dockerfile
+      hash: md5
+      md5: 15dd455982ee6b64f848ddb66fb2cee2
+      size: 256
+    - path: augmentation/cli/augment.py
+      hash: md5
+      md5: 8869463589fecb1cb4a409f417d10b0d
+      size: 14099
+    - path: augmentation/config/default_config.yaml
+      hash: md5
+      md5: db4ec3f2204d89251bb64462d00ecdad
+      size: 1447
+    - path: augmentation/requirements-runtime.txt
+      hash: md5
+      md5: a84415c3be592d7ac92177a1b5e62dea
+      size: 207
+    - path: synthea_runner/output/synthea_raw/csv
+      hash: md5
+      md5: eb4a4f84ccccc551f7ccd5f897304ad5.dir
+      size: 453860043
+      nfiles: 18
+    params:
+      params.yaml:
+        augment.random_seed: 99
+    outs:
+    - path: output/augmented
+      hash: md5
+      md5: c0462233987f98a8a0a4b3a8cea38582.dir
+      size: 65277980
+      nfiles: 95
+  resolve:
+    cmd: rm -rf output/resolved && docker build -f entity_resolution/Dockerfile 
+      -t entity_resolution . && docker run --rm -v 
+      $(pwd)/output/augmented:/data/augmented:ro -v 
+      $(pwd)/output/resolved:/data/resolved entity_resolution python -m 
+      entity_resolution.resolve --augmented-dir /data/augmented --output-dir 
+      /data/resolved --config entity_resolution/config/matching_config.yaml
+    deps:
+    - path: entity_resolution/Dockerfile
+      hash: md5
+      md5: 7cc32a34c0caf937ee0b223685f730ca
+      size: 290
+    - path: entity_resolution/config/matching_config.yaml
+      hash: md5
+      md5: e5bb76c29675db209dfd29c605ecbdff
+      size: 967
+    - path: entity_resolution/core/
+      hash: md5
+      md5: 4590c9d42dc08d9d7886f341352aacd0.dir
+      size: 83908
+      nfiles: 12
+    - path: entity_resolution/requirements-runtime.txt
+      hash: md5
+      md5: 7e2092f1ddb89d1289fbb7d876e18cdd
+      size: 83
+    - path: entity_resolution/resolve.py
+      hash: md5
+      md5: f3a0805d28a96ab5e65be5b83a622cb3
+      size: 9950
+    - path: output/augmented
+      hash: md5
+      md5: c0462233987f98a8a0a4b3a8cea38582.dir
+      size: 65277980
+      nfiles: 95
+    - path: shared/
+      hash: md5
+      md5: 6ff408ab4be1cb4ead10b75ef9db8609.dir
+      size: 162933
+      nfiles: 31
+    params:
+      params.yaml:
+        resolve.auto_match_probability: 0.95
+        resolve.auto_reject_probability: 0.05
+    outs:
+    - path: output/resolved
+      hash: md5
+      md5: 2f5ce66c0f4c30b659452954f938ace7.dir
+      size: 834245
+      nfiles: 4
+  golden_records:
+    cmd: rm -rf output/golden_records && docker run --rm -v 
+      $(pwd)/output/augmented:/data/augmented:ro -v 
+      $(pwd)/output/resolved:/data/resolved:ro -v 
+      $(pwd)/output/inferred:/data/inferred:ro -v 
+      $(pwd)/output/golden_records:/data/golden_records entity_resolution python
+      -m entity_resolution.build_golden_records --augmented-dir /data/augmented 
+      --auto-matches /data/resolved/auto_matches.parquet --predictions 
+      /data/inferred/predictions.parquet --features 
+      /data/resolved/features.parquet --output-dir /data/golden_records --config
+      entity_resolution/config/matching_config.yaml
+    deps:
+    - path: entity_resolution/build_golden_records.py
+      hash: md5
+      md5: 89107bae6766d43ed041059c66ec26e5
+      size: 10015
+    - path: entity_resolution/core/
+      hash: md5
+      md5: 4590c9d42dc08d9d7886f341352aacd0.dir
+      size: 83908
+      nfiles: 12
+    - path: output/augmented
+      hash: md5
+      md5: c0462233987f98a8a0a4b3a8cea38582.dir
+      size: 65277980
+      nfiles: 95
+    - path: output/inferred/predictions.parquet
+      hash: md5
+      md5: ac9e14e42662d3e0ba58f562d8da4606
+      size: 14398
+    - path: output/resolved/auto_matches.parquet
+      hash: md5
+      md5: f3440ce21c4c0adf61c094a6f1d1c5a0
+      size: 44187
+    - path: output/resolved/features.parquet
+      hash: md5
+      md5: badda57856e2e1340466a0a5d65c3e3a
+      size: 179143
+    - path: shared/
+      hash: md5
+      md5: 6ff408ab4be1cb4ead10b75ef9db8609.dir
+      size: 162933
+      nfiles: 31
+    outs:
+    - path: output/golden_records
+      hash: md5
+      md5: a3673e39f519ffdd7fce68ab25e5d47d.dir
+      size: 122697
+      nfiles: 3
+  infer:
+    cmd: rm -rf output/inferred && mkdir -p output/inferred && 
+      llm_classifier/infer_remote.sh output/resolved/gray_zone_pairs.parquet 
+      output/inferred/predictions.parquet
+    deps:
+    - path: llm_classifier/Dockerfile
+      hash: md5
+      md5: f04d78408841b34017ddd43fc79d4b07
+      size: 1288
+    - path: llm_classifier/_remote_helpers.sh
+      hash: md5
+      md5: 94c2e7d4b9322c238878e87f23d1a01f
+      size: 10532
+    - path: llm_classifier/infer_classifier.py
+      hash: md5
+      md5: 9f231f78d8df51d4c0d59e067d61a368
+      size: 16432
+    - path: llm_classifier/infer_remote.sh
+      hash: md5
+      md5: 5d7e50f9829d216471840a2049f4dc90
+      size: 5463
+      isexec: true
+    - path: llm_classifier/launch_pod.sh
+      hash: md5
+      md5: 0d45d0b88631a55c5ad1b154663749c4
+      size: 4104
+      isexec: true
+    - path: llm_classifier/requirements.txt
+      hash: md5
+      md5: c18a171753741de19258bb92ea08add9
+      size: 171
+    - path: output/resolved/gray_zone_pairs.parquet
+      hash: md5
+      md5: 1f2378326644c1092ff0cee127a9e667
+      size: 610489
+    outs:
+    - path: output/inferred/predictions.parquet
+      hash: md5
+      md5: ac9e14e42662d3e0ba58f562d8da4606
+      size: 14398
+  train_scorer:
+    cmd: rm -rf output/scorer && docker run --rm -v 
+      $(pwd)/output/augmented:/data/augmented:ro -v 
+      $(pwd)/output/resolved:/data/resolved:ro -v 
+      $(pwd)/output/inferred:/data/inferred:ro -v 
+      $(pwd)/output/scorer:/data/scorer entity-resolution python 
+      entity-resolution/train_scorer.py --augmented-dir /data/augmented 
+      --features /data/resolved/features.csv --predictions 
+      /data/inferred/predictions.csv --output-dir /data/scorer
+    deps:
+    - path: entity-resolution/Dockerfile
+      hash: md5
+      md5: aa2df09e7babc2dd685536ad3ac410c4
+      size: 270
+    - path: entity-resolution/src/
+      hash: md5
+      md5: ac01e60838228d102b6b62db67e9be60.dir
+      size: 89748
+      nfiles: 13
+    - path: entity-resolution/train_scorer.py
+      hash: md5
+      md5: 51b1464ba837f10602576d0167c80370
+      size: 8326
+    - path: output/augmented
+      hash: md5
+      md5: 4549fb5837ad07fe383e8bcb4948abd6.dir
+      size: 533496994
+      nfiles: 95
+    - path: output/inferred/predictions.csv
+      hash: md5
+      md5: e54ab911add8ef1edf55ec7f5cf12402
+      size: 6566366
+    - path: output/resolved/features.csv
+      hash: md5
+      md5: f00eb320148f532263fc455c795a8a63
+      size: 4802770
+    - path: shared/
+      hash: md5
+      md5: dee2997ebbb4933304e9afa4bf0b7ce7.dir
+      size: 30371
+      nfiles: 10
+    outs:
+    - path: output/scorer
+      hash: md5
+      md5: ca86d9b96ae24ae89cb79ee5de47d04c.dir
+      size: 3488
+      nfiles: 2
+  generate_training:
+    cmd: rm -rf output/training/synthea_raw && docker build -t synthea -t 
+      synthea:$(git rev-parse --short HEAD) synthea_runner/synthea-docker/ && 
+      docker run --rm -e JAVA_OPTS=-Xmx8g -v 
+      $(pwd)/output/training/synthea_raw:/synthea/synthea/output synthea /bin/sh
+      -c "./run_synthea -p 500 -s 12345 --exporter.baseDirectory=./output 
+      --exporter.csv.export=true --exporter.fhir.export=false Massachusetts"
+    deps:
+    - path: synthea_runner/synthea-docker/Dockerfile
+      hash: md5
+      md5: 1369d1d9cd02662b7bf3fe723a265ca1
+      size: 1433
+    params:
+      params.yaml:
+        generate_training.population: 500
+        generate_training.seed: 12345
+    outs:
+    - path: output/training/synthea_raw/csv
+      hash: md5
+      md5: b4ad442b5bec55659efc4cd41d9412a2.dir
+      size: 446012269
+      nfiles: 18
+  augment_training:
+    cmd: rm -rf output/training/augmented && docker build -t augmentation -t 
+      augmentation:$(git rev-parse --short HEAD) augmentation/ && docker run 
+      --rm -v $(pwd)/output/training/synthea_raw/csv:/data/input:ro -v 
+      $(pwd)/output/training/augmented:/data/output augmentation --input 
+      /data/input --output /data/output --random-seed 42
+    deps:
+    - path: augmentation/Dockerfile
+      hash: md5
+      md5: 15dd455982ee6b64f848ddb66fb2cee2
+      size: 256
+    - path: augmentation/cli/augment.py
+      hash: md5
+      md5: 8869463589fecb1cb4a409f417d10b0d
+      size: 14099
+    - path: augmentation/config/default_config.yaml
+      hash: md5
+      md5: db4ec3f2204d89251bb64462d00ecdad
+      size: 1447
+    - path: augmentation/requirements-runtime.txt
+      hash: md5
+      md5: a84415c3be592d7ac92177a1b5e62dea
+      size: 207
+    - path: output/training/synthea_raw/csv
+      hash: md5
+      md5: b4ad442b5bec55659efc4cd41d9412a2.dir
+      size: 446012269
+      nfiles: 18
+    params:
+      params.yaml:
+        augment_training.random_seed: 42
+    outs:
+    - path: output/training/augmented
+      hash: md5
+      md5: 73fd50125b4049894f0325b9545f6b9e.dir
+      size: 64784914
+      nfiles: 95
+  prepare_dataset:
+    cmd: rm -rf output/training/dataset && mkdir -p output/training/dataset && 
+      docker build -f llm_classifier/Dockerfile.prepare -t prepare-dataset -t 
+      prepare-dataset:$(git rev-parse --short HEAD) . && docker run --rm -v 
+      $(pwd)/output/training/augmented:/data/augmented:ro -v 
+      $(pwd)/output/training/dataset:/data/dataset -v 
+      $(pwd)/llm_classifier/.env:/app/.env:ro prepare-dataset python 
+      llm_classifier/prepare_dataset.py --augmented-dir /data/augmented 
+      --output-dir /data/dataset --seed 42
+    deps:
+    - path: llm_classifier/Dockerfile.prepare
+      hash: md5
+      md5: 6242b2b0a3231d9cabb4c19f0ec8764e
+      size: 264
+    - path: llm_classifier/prepare_dataset.py
+      hash: md5
+      md5: bf6ff25ccb664e7ed99d67c1618a5d7a
+      size: 11439
+    - path: llm_classifier/requirements-prepare.txt
+      hash: md5
+      md5: 70b89cb85a1deca8fa0f21758121638e
+      size: 150
+    - path: output/training/augmented
+      hash: md5
+      md5: 73fd50125b4049894f0325b9545f6b9e.dir
+      size: 64784914
+      nfiles: 95
+    - path: shared/data_loader.py
+      hash: md5
+      md5: 3dcfb60a7a6495668586688383f553be
+      size: 4501
+    - path: shared/ground_truth.py
+      hash: md5
+      md5: 5d717ceb97e016ab796cf2fd0b3b5ba6
+      size: 2846
+    - path: shared/medical_records.py
+      hash: md5
+      md5: eb20d6ab66d374166cb3b62bd17a2268
+      size: 3335
+    - path: shared/summarize.py
+      hash: md5
+      md5: 8caae3e1a6f5ec4375327c7bd70f26b9
+      size: 5040
+    params:
+      params.yaml:
+        prepare_dataset.seed: 42
+    outs:
+    - path: output/training/dataset/dataset_info.json
+      hash: md5
+      md5: b452e16e38c94d67b14d09808e19a586
+      size: 228
+  train:
+    cmd: rm -rf output/training/train && mkdir -p output/training/train && 
+      llm_classifier/train_remote.sh --gpu-type "NVIDIA H100 80GB HBM3" 
+      output/training/train -- --epochs 3 --batch-size 4 --lr 0.0001 
+      --max-length 2048 --lora-r 16
+    deps:
+    - path: llm_classifier/Dockerfile
+      hash: md5
+      md5: 1c853753489edc092e793e15ecc75210
+      size: 1374
+    - path: llm_classifier/_remote_helpers.sh
+      hash: md5
+      md5: 94c2e7d4b9322c238878e87f23d1a01f
+      size: 10532
+    - path: llm_classifier/launch_pod.sh
+      hash: md5
+      md5: 0d45d0b88631a55c5ad1b154663749c4
+      size: 4104
+      isexec: true
+    - path: llm_classifier/requirements.txt
+      hash: md5
+      md5: 4155a096ecc262e6a5963d396269ab6d
+      size: 186
+    - path: llm_classifier/train_classifier.py
+      hash: md5
+      md5: ec8c02c148f35d8786de44b8db651cf3
+      size: 11391
+    - path: llm_classifier/train_remote.sh
+      hash: md5
+      md5: a07b689b733106de888017b897d3ed8f
+      size: 3915
+      isexec: true
+    - path: output/training/dataset/dataset_info.json
+      hash: md5
+      md5: b452e16e38c94d67b14d09808e19a586
+      size: 228
+    params:
+      params.yaml:
+        train.batch_size: 4
+        train.epochs: 3
+        train.lora_r: 16
+        train.lr: 0.0001
+        train.max_length: 2048
+    outs:
+    - path: output/training/train/train_metrics.json
+      hash: md5
+      md5: c438edbc35eea4830f5fcd9f882a1afc
+      size: 344
+  export:
+    cmd: rm -rf output/training/export && mkdir -p output/training/export && 
+      llm_classifier/export_remote.sh --gpu-type "NVIDIA H100 80GB HBM3" 
+      output/training/export
+    deps:
+    - path: llm_classifier/Dockerfile
+      hash: md5
+      md5: f04d78408841b34017ddd43fc79d4b07
+      size: 1288
+    - path: llm_classifier/_remote_helpers.sh
+      hash: md5
+      md5: 94c2e7d4b9322c238878e87f23d1a01f
+      size: 10532
+    - path: llm_classifier/export_model.py
+      hash: md5
+      md5: b80f18b5d2d16715b5e5c16bce1f6104
+      size: 10559
+    - path: llm_classifier/export_remote.sh
+      hash: md5
+      md5: 90cf0aef9c035e45b5e389468ba0ac08
+      size: 3008
+      isexec: true
+    - path: llm_classifier/launch_pod.sh
+      hash: md5
+      md5: 0d45d0b88631a55c5ad1b154663749c4
+      size: 4104
+      isexec: true
+    - path: llm_classifier/requirements.txt
+      hash: md5
+      md5: c18a171753741de19258bb92ea08add9
+      size: 171
+    - path: output/training/train/train_metrics.json
+      hash: md5
+      md5: 67412620af65113a740ce97df2784ae1
+      size: 346
+    outs:
+    - path: output/training/export/export_info.json
+      hash: md5
+      md5: a7093a3664cee2c9d0ecb9ae1d5f31bb
+      size: 283
