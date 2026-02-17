@@ -1,8 +1,8 @@
 """Streaming utilities for chunked table-to-facility distribution."""
 
-import pandas as pd
-
 from pathlib import Path
+
+import pandas as pd
 
 from ..utils import DataHandler
 from .data_splitter import DataSplitter
