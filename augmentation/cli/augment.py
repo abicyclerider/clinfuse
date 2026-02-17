@@ -1,5 +1,7 @@
 """Command-line interface for data augmentation."""
 
+import platform
+import resource
 import time
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +26,17 @@ from ..generators import FacilityGenerator
 from ..utils import DataHandler, DataValidator
 
 console = Console()
+
+
+_IS_MACOS = platform.system() == "Darwin"
+
+
+def _log_memory(label: str) -> None:
+    """Log current peak RSS memory usage with a label."""
+    # ru_maxrss is in KB on Linux, bytes on macOS
+    ru = resource.getrusage(resource.RUSAGE_SELF)
+    rss_mb = ru.ru_maxrss / (1024 * 1024) if _IS_MACOS else ru.ru_maxrss / 1024
+    console.print(f"  [dim][mem] {label}: peak RSS = {rss_mb:.0f} MB[/dim]")
 
 
 @click.command()
@@ -208,10 +221,11 @@ def _stream_table_to_facilities(
     facilities_dir: Path,
     all_facilities: list[int],
     per_facility_patients: dict[int, set[str]],
-    per_facility_encounters: dict[int, set[str]],
+    per_facility_encounters: dict[int, set[str]] | None = None,
     per_facility_claim_ids: dict[int, set[str]] | None = None,
     chunksize: int = 500_000,
     payer_transitions_date_ranges: dict[int, pd.DataFrame] | None = None,
+    enc_to_fac_map: dict[str, int] | None = None,
 ) -> tuple[int, int]:
     """Stream a CSV in chunks, filter per facility, write Parquet incrementally.
 
@@ -237,12 +251,14 @@ def _stream_table_to_facilities(
     # Determine which fast path applies
     is_encounter_linked = table_name in data_handler.ENCOUNTER_LINKED_TABLES
     is_claims = table_name == "claims.csv"
+    is_encounters = table_name == "encounters.csv"
     is_reference = table_name in data_handler.REFERENCE_TABLES
 
-    # Build encounter→facility map once for encounter-linked tables and claims
-    enc_to_fac: dict[str, int] | None = None
-    if is_encounter_linked or is_claims:
-        enc_to_fac = _build_encounter_to_facility_map(per_facility_encounters)
+    # Use pre-built map if provided, otherwise build from per-facility sets
+    enc_to_fac: dict[str, int] | None = enc_to_fac_map
+    if enc_to_fac is None and (is_encounter_linked or is_claims or is_encounters):
+        if per_facility_encounters is not None:
+            enc_to_fac = _build_encounter_to_facility_map(per_facility_encounters)
 
     def _write_subset(facility_id: int, subset: pd.DataFrame) -> None:
         nonlocal schema
@@ -266,6 +282,16 @@ def _stream_table_to_facilities(
             # Reference tables: write full chunk to every facility
             for facility_id in all_facilities:
                 _write_subset(facility_id, chunk)
+
+        elif is_encounters:
+            # Fast path for encounters: map Id → facility
+            fac_col = chunk["Id"].map(enc_to_fac)
+            mask = fac_col.notna()
+            if mask.any():
+                matched = chunk[mask]
+                fac_ids = fac_col[mask].astype(int)
+                for facility_id, group_df in matched.groupby(fac_ids):
+                    _write_subset(facility_id, group_df)
 
         elif is_encounter_linked:
             # Fast path: single map + groupby instead of N × isin
@@ -294,39 +320,53 @@ def _stream_table_to_facilities(
 
         elif table_name == "payer_transitions.csv":
             # Use cached date ranges instead of re-reading parquet each time
+            _empty_enc: set[str] = set()
             for facility_id in all_facilities:
-                fac_encounters_df = None
+                cached_ranges = None
                 if payer_transitions_date_ranges is not None:
-                    fac_encounters_df = payer_transitions_date_ranges.get(facility_id)
-                if fac_encounters_df is None:
-                    # Fallback: read from disk (shouldn't happen with caching)
+                    cached_ranges = payer_transitions_date_ranges.get(facility_id)
+
+                if cached_ranges is not None:
+                    subset = data_splitter.filter_table_for_facility(
+                        table_name,
+                        chunk,
+                        facility_id,
+                        per_facility_patients[facility_id],
+                        _empty_enc,
+                        patient_date_ranges=cached_ranges,
+                        copy=False,
+                    )
+                else:
+                    # Fallback: read from disk
                     try:
                         fac_encounters_df = data_handler.read_facility_table(
                             facilities_dir, facility_id, "encounters.csv"
                         )
                     except FileNotFoundError:
                         continue
-
-                subset = data_splitter.filter_table_for_facility(
-                    table_name,
-                    chunk,
-                    facility_id,
-                    per_facility_patients[facility_id],
-                    per_facility_encounters[facility_id],
-                    facility_encounters_df=fac_encounters_df,
-                    copy=False,
-                )
+                    subset = data_splitter.filter_table_for_facility(
+                        table_name,
+                        chunk,
+                        facility_id,
+                        per_facility_patients[facility_id],
+                        _empty_enc,
+                        facility_encounters_df=fac_encounters_df,
+                        copy=False,
+                    )
+                    del fac_encounters_df
                 _write_subset(facility_id, subset)
 
         else:
-            # Generic fallback (claims_transactions, encounters, patients, etc.)
+            # Generic fallback (claims_transactions only — all other table
+            # types have dedicated fast paths above)
+            _empty_set: set[str] = set()
             for facility_id in all_facilities:
                 subset = data_splitter.filter_table_for_facility(
                     table_name,
                     chunk,
                     facility_id,
                     per_facility_patients[facility_id],
-                    per_facility_encounters[facility_id],
+                    _empty_set,
                     facility_claim_ids=(
                         per_facility_claim_ids.get(facility_id)
                         if per_facility_claim_ids
@@ -334,15 +374,6 @@ def _stream_table_to_facilities(
                     ),
                     copy=False,
                 )
-
-                # Capture claim IDs while streaming claims.csv
-                if (
-                    table_name == "claims.csv"
-                    and per_facility_claim_ids is not None
-                    and len(subset) > 0
-                ):
-                    per_facility_claim_ids[facility_id].update(subset["Id"].values)
-
                 _write_subset(facility_id, subset)
 
     # Close all writers
@@ -407,6 +438,7 @@ def run_augmentation_pipeline(
             f"[green]✓[/green] Loaded {num_patients_loaded} patients, "
             f"{num_encounters_loaded} encounters (lightweight)"
         )
+        _log_memory("after loading CSV data")
 
         # ── Task 2: Generate facility metadata ──
         task2 = progress.add_task("[cyan]Generating facility metadata...", total=None)
@@ -476,6 +508,10 @@ def run_augmentation_pipeline(
                 fec = facility_enc_counts[fid]
                 fec[patient] = fec.get(patient, 0) + cnt
         del enc_fac_series
+        # Free the large assignment dicts — all data is now in per_facility_*
+        # sets, facility_enc_counts, and assignment_stats.
+        del patient_facilities, encounter_facilities
+        _log_memory("after facility assignment")
 
         # ── Phase A: patients — error injection, ground truth, write ──
         task_a = progress.add_task(
@@ -565,6 +601,15 @@ def run_augmentation_pipeline(
             f"[dim]({elapsed_a:.1f}s)[/dim]"
         )
         error_stats = error_injector.get_error_statistics(all_error_logs)
+        del all_error_logs
+        _log_memory("after Phase A")
+
+        # Build encounter→facility map once, then free the large per-facility
+        # encounter sets (~900MB for 10M UUIDs).  Phase B uses the map for
+        # encounter-linked tables; encounters.csv is already on disk.
+        enc_to_fac_map = _build_encounter_to_facility_map(per_facility_encounters)
+        del per_facility_encounters
+        _log_memory("after building enc_to_fac_map (freed per_facility_encounters)")
 
         # ── Phase B: stream remaining tables one at a time ──
         # Order: claims before claims_transactions; encounters already on disk.
@@ -594,8 +639,9 @@ def run_augmentation_pipeline(
             fid: set() for fid in all_facilities
         }
 
-        # Pre-cache per-facility encounter date ranges for payer_transitions
-        # (avoids re-reading encounters.parquet N_facilities × N_chunks times)
+        # Pre-cache per-facility patient date ranges for payer_transitions
+        # Only stores the small aggregate (one row per patient), not the full
+        # encounters DataFrame, to avoid OOM on large populations.
         payer_transitions_date_ranges: dict[int, pd.DataFrame] | None = None
         if (input_dir / "payer_transitions.csv").exists():
             payer_transitions_date_ranges = {}
@@ -604,9 +650,17 @@ def run_augmentation_pipeline(
                     enc_df = data_handler.read_facility_table(
                         facilities_dir, facility_id, "encounters.csv"
                     )
-                    payer_transitions_date_ranges[facility_id] = enc_df
+                    if len(enc_df) > 0:
+                        date_ranges = (
+                            enc_df.groupby("PATIENT")["START"]
+                            .agg(min_date="min", max_date="max")
+                            .reset_index()
+                        )
+                        payer_transitions_date_ranges[facility_id] = date_ranges
+                    del enc_df
                 except FileNotFoundError:
                     pass
+            _log_memory("after caching payer_transitions date ranges")
 
         for table_name in phase_b_tables:
             file_path = input_dir / table_name
@@ -625,21 +679,25 @@ def run_augmentation_pipeline(
                 facilities_dir,
                 all_facilities,
                 per_facility_patients,
-                per_facility_encounters,
                 per_facility_claim_ids=per_facility_claim_ids,
                 payer_transitions_date_ranges=payer_transitions_date_ranges,
+                enc_to_fac_map=enc_to_fac_map,
             )
+            t_table = time.monotonic() - t0
             console.print(
-                f"  [dim]{short_name}: {rows:,} rows in {chunks} chunk(s)[/dim]"
+                f"  [dim]{short_name}: {rows:,} rows in {chunks} chunk(s) "
+                f"({t_table:.0f}s elapsed)[/dim]"
             )
+            _log_memory(f"after {short_name}")
             progress.update(task_b, advance=1)
 
-        del per_facility_claim_ids, payer_transitions_date_ranges
+        del per_facility_claim_ids, payer_transitions_date_ranges, enc_to_fac_map
         elapsed_b = time.monotonic() - t0
         console.print(
             f"[green]✓[/green] Phase B complete: streamed {len(phase_b_tables)} tables "
             f"[dim]({elapsed_b:.1f}s)[/dim]"
         )
+        _log_memory("after Phase B (freed maps)")
 
         # ── Phase C: validation ──
         validation_errors = []

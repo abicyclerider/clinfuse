@@ -144,6 +144,7 @@ class DataSplitter:
         facility_encounters_df: Optional[pd.DataFrame] = None,
         facility_claim_ids: Optional[Set[str]] = None,
         copy: bool = True,
+        patient_date_ranges: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         """
         Filter a single source table for one facility.
@@ -193,9 +194,12 @@ class DataSplitter:
                 return pd.DataFrame(columns=df.columns)
 
         elif filename == "payer_transitions.csv":
-            if facility_encounters_df is not None:
+            if facility_encounters_df is not None or patient_date_ranges is not None:
                 return self._split_payer_transitions_temporally(
-                    df, facility_patients, facility_encounters_df
+                    df,
+                    facility_patients,
+                    facility_encounters_df,
+                    patient_date_ranges=patient_date_ranges,
                 )
             else:
                 return pd.DataFrame(columns=df.columns)
@@ -212,6 +216,7 @@ class DataSplitter:
         payer_transitions_df: pd.DataFrame,
         facility_patients: Set[str],
         facility_encounters_df: pd.DataFrame,
+        patient_date_ranges: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         """
         Split payer_transitions temporally based on facility's encounter date range.
@@ -223,6 +228,9 @@ class DataSplitter:
             payer_transitions_df: Full payer transitions DataFrame
             facility_patients: Set of patient UUIDs at this facility
             facility_encounters_df: Encounters DataFrame for this facility
+            patient_date_ranges: Optional pre-computed date ranges (PATIENT,
+                min_date, max_date).  When provided, facility_encounters_df
+                may be empty/None.
 
         Returns:
             Filtered payer transitions DataFrame
@@ -232,15 +240,21 @@ class DataSplitter:
             payer_transitions_df["PATIENT"].isin(facility_patients)
         ].copy()
 
-        if len(patient_transitions) == 0 or len(facility_encounters_df) == 0:
+        if len(patient_transitions) == 0:
             return pd.DataFrame(columns=payer_transitions_df.columns)
 
-        # Calculate encounter date range for each patient at this facility
-        patient_date_ranges = (
-            facility_encounters_df.groupby("PATIENT")["START"]
-            .agg(min_date="min", max_date="max")
-            .reset_index()
-        )
+        # Use pre-computed date ranges if available, otherwise compute
+        if patient_date_ranges is None:
+            if facility_encounters_df is None or len(facility_encounters_df) == 0:
+                return pd.DataFrame(columns=payer_transitions_df.columns)
+            patient_date_ranges = (
+                facility_encounters_df.groupby("PATIENT")["START"]
+                .agg(min_date="min", max_date="max")
+                .reset_index()
+            )
+
+        if len(patient_date_ranges) == 0:
+            return pd.DataFrame(columns=payer_transitions_df.columns)
 
         # Merge with transitions to get date ranges
         merged = patient_transitions.merge(
