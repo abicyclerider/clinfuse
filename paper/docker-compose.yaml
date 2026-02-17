@@ -1,0 +1,7 @@
+services:
+  latex:
+    build: .
+    volumes:
+      - .:/work
+    working_dir: /work
+    command: sh -c "pdflatex -interaction=nonstopmode clinfuse.tex; pdflatex -interaction=nonstopmode clinfuse.tex"
