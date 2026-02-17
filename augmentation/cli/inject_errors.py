@@ -128,9 +128,7 @@ def main(
         console=console,
     ) as progress:
         # ── Inject errors into patients, copy other tables ──
-        task1 = progress.add_task(
-            "[cyan]Injecting errors...", total=num_facilities
-        )
+        task1 = progress.add_task("[cyan]Injecting errors...", total=num_facilities)
 
         for facility_id in facility_ids:
             src_facility_dir = input_facilities_dir / f"facility_{facility_id:03d}"
@@ -204,9 +202,7 @@ def main(
         # ── Validation ──
         validation_errors = []
         if validate:
-            task_v = progress.add_task(
-                "[cyan]Validating...", total=num_facilities
-            )
+            task_v = progress.add_task("[cyan]Validating...", total=num_facilities)
             validator = DataValidator()
 
             for facility_id in facility_ids:
@@ -263,7 +259,9 @@ def main(
 
     # Display summary
     console.print(f"\n  Total Errors: {error_stats['total_errors']}")
-    console.print(f"  Patients with Errors: {ground_truth_stats['patients_with_errors']}")
+    console.print(
+        f"  Patients with Errors: {ground_truth_stats['patients_with_errors']}"
+    )
     console.print(f"  Error Rate: {ground_truth_stats['error_rate']:.1%}")
 
 

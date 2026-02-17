@@ -47,7 +47,9 @@ def _strip_synthea_numbers_arrow(table: pa.Table) -> pa.Table:
                 stripped = re.sub(r"\d+", "", str(val)).strip()
                 stripped = re.sub(r"\s+", " ", stripped)
                 new_values.append(stripped)
-        table = table.set_column(col_idx, table.schema.field(col_idx), pa.array(new_values, type=pa.string()))
+        table = table.set_column(
+            col_idx, table.schema.field(col_idx), pa.array(new_values, type=pa.string())
+        )
     return table
 
 

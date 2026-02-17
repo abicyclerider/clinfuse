@@ -54,10 +54,7 @@ class DataValidator:
         patient_ids = set(facility_tables["patients"]["Id"].values)
 
         # Check encounters
-        if (
-            "encounters" in facility_tables
-            and len(facility_tables["encounters"]) > 0
-        ):
+        if "encounters" in facility_tables and len(facility_tables["encounters"]) > 0:
             encounter_patients = set(facility_tables["encounters"]["PATIENT"].values)
             invalid = encounter_patients - patient_ids
             if invalid:

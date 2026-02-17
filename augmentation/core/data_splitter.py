@@ -95,7 +95,9 @@ class DataSplitter:
 
             elif table_name == "encounters":
                 # Encounters: filter by facility assignment
-                facility_data[table_name] = df[df["Id"].isin(facility_encounters)].copy()
+                facility_data[table_name] = df[
+                    df["Id"].isin(facility_encounters)
+                ].copy()
 
             elif table_name in self.data_handler.ENCOUNTER_LINKED_TABLES:
                 # Encounter-linked tables: follow encounter assignment
