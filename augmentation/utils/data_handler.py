@@ -139,6 +139,109 @@ class DataHandler:
         return csvs
 
     @classmethod
+    def load_single_csv(cls, input_dir: Path, filename: str) -> pd.DataFrame:
+        """
+        Load one Synthea CSV file with standard date parsing and name stripping.
+
+        Args:
+            input_dir: Directory containing Synthea CSV files
+            filename: CSV filename (e.g. 'patients.csv')
+
+        Returns:
+            DataFrame with CSV contents
+        """
+        file_path = input_dir / filename
+        if not file_path.exists():
+            raise FileNotFoundError(f"Required CSV file not found: {file_path}")
+
+        parse_dates = None
+        if filename == "encounters.csv":
+            parse_dates = ["START", "STOP"]
+        elif filename == "payer_transitions.csv":
+            parse_dates = ["START_DATE", "END_DATE"]
+        elif filename == "patients.csv":
+            parse_dates = ["BIRTHDATE", "DEATHDATE"]
+
+        df = cls.read_csv(file_path, parse_dates=parse_dates)
+
+        if filename == "patients.csv":
+            df = cls._strip_synthea_numbers(df)
+
+        return df
+
+    @classmethod
+    def write_facility_table(
+        cls,
+        df: pd.DataFrame,
+        output_dir: Path,
+        facility_id: int,
+        filename: str,
+    ) -> None:
+        """
+        Write one Parquet table for one facility.
+
+        Args:
+            df: DataFrame to write
+            output_dir: Base output directory (parent of facility_NNN dirs)
+            facility_id: Facility identifier
+            filename: Original CSV filename (e.g. 'patients.csv')
+        """
+        facility_dir = output_dir / f"facility_{facility_id:03d}"
+        facility_dir.mkdir(parents=True, exist_ok=True)
+        parquet_name = Path(filename).with_suffix(".parquet").name
+        df.to_parquet(facility_dir / parquet_name, index=False)
+
+    @classmethod
+    def read_facility_table(
+        cls,
+        output_dir: Path,
+        facility_id: int,
+        filename: str,
+    ) -> pd.DataFrame:
+        """
+        Read one Parquet file back for a facility.
+
+        Args:
+            output_dir: Base output directory (parent of facility_NNN dirs)
+            facility_id: Facility identifier
+            filename: Original CSV filename (e.g. 'encounters.csv')
+
+        Returns:
+            DataFrame with Parquet contents
+        """
+        facility_dir = output_dir / f"facility_{facility_id:03d}"
+        parquet_name = Path(filename).with_suffix(".parquet").name
+        parquet_path = facility_dir / parquet_name
+        if not parquet_path.exists():
+            raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+        return pd.read_parquet(parquet_path)
+
+    @classmethod
+    def read_all_facility_tables(
+        cls,
+        output_dir: Path,
+        facility_id: int,
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        Read all Parquet files for one facility into a dict.
+
+        Args:
+            output_dir: Base output directory (parent of facility_NNN dirs)
+            facility_id: Facility identifier
+
+        Returns:
+            Dictionary mapping original CSV filename to DataFrame
+        """
+        facility_dir = output_dir / f"facility_{facility_id:03d}"
+        result = {}
+        for filename in cls.SYNTHEA_CSV_FILES:
+            parquet_name = Path(filename).with_suffix(".parquet").name
+            parquet_path = facility_dir / parquet_name
+            if parquet_path.exists():
+                result[filename] = pd.read_parquet(parquet_path)
+        return result
+
+    @classmethod
     def write_facility_data(
         cls,
         facility_csvs: Dict[str, pd.DataFrame],

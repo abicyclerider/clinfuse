@@ -1,5 +1,6 @@
 """Command-line interface for data augmentation."""
 
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -192,7 +193,17 @@ def run_augmentation_pipeline(
     output_dir: Path,
     validate: bool,
 ):
-    """Run the complete augmentation pipeline."""
+    """Run the complete augmentation pipeline.
+
+    Uses two-phase table streaming to keep peak memory low:
+      Phase A: Load patients + encounters + organizations, do assignment/errors/write.
+      Phase B: Stream each remaining table from disk, filter per facility, write.
+      Phase C: Validate each facility by reading back all Parquet files.
+      Phase D: Write metadata (facilities, ground truth, config, statistics).
+    """
+    input_dir = config.paths.input_dir
+    facilities_dir = output_dir / "facilities"
+    t0 = time.monotonic()
 
     with Progress(
         SpinnerColumn(),
@@ -201,28 +212,29 @@ def run_augmentation_pipeline(
         TaskProgressColumn(),
         console=console,
     ) as progress:
-        # Task 1: Load CSV files
-        task1 = progress.add_task("[cyan]Loading Synthea CSV files...", total=None)
+        # ── Task 1: Load core tables only (patients, encounters, organizations) ──
+        task1 = progress.add_task("[cyan]Loading core CSV files...", total=None)
         data_handler = DataHandler()
-        synthea_csvs = data_handler.load_synthea_csvs(config.paths.input_dir)
-        patients_df = synthea_csvs["patients.csv"]
-        encounters_df = synthea_csvs["encounters.csv"]
+        patients_df = data_handler.load_single_csv(input_dir, "patients.csv")
+        encounters_df = data_handler.load_single_csv(input_dir, "encounters.csv")
+        organizations_df = data_handler.load_single_csv(input_dir, "organizations.csv")
         progress.update(task1, completed=True, total=1)
         console.print(
-            f"[green]✓[/green] Loaded {len(patients_df)} patients, {len(encounters_df)} encounters"
+            f"[green]✓[/green] Loaded {len(patients_df)} patients, "
+            f"{len(encounters_df)} encounters"
         )
 
-        # Task 2: Generate facility metadata
+        # ── Task 2: Generate facility metadata ──
         task2 = progress.add_task("[cyan]Generating facility metadata...", total=None)
         facility_generator = FacilityGenerator(random_seed=config.random_seed)
         facilities_df = facility_generator.generate_facilities(
             config.facility_distribution.num_facilities,
-            synthea_csvs["organizations.csv"],
+            organizations_df,
         )
         progress.update(task2, completed=True, total=1)
         console.print(f"[green]✓[/green] Generated {len(facilities_df)} facilities")
 
-        # Task 3: Assign patients to facilities
+        # ── Task 3: Assign patients to facilities ──
         task3 = progress.add_task(
             "[cyan]Assigning patients to facilities...", total=None
         )
@@ -238,15 +250,24 @@ def run_augmentation_pipeline(
         )
         console.print("[green]✓[/green] Assigned patients across facilities")
 
-        # Tasks 4-7: Process each facility in a streaming fashion
-        # (split → inject errors → write → validate per facility to avoid OOM)
+        # ── Precompute per-facility ID sets ──
         all_facilities = sorted(
             {fid for fids in patient_facilities.values() for fid in fids}
         )
         num_facilities = len(all_facilities)
 
-        task_main = progress.add_task(
-            "[cyan]Processing facilities...", total=num_facilities
+        per_facility_patients: dict[int, set[str]] = {fid: set() for fid in all_facilities}
+        for patient_uuid, fids in patient_facilities.items():
+            for fid in fids:
+                per_facility_patients[fid].add(patient_uuid)
+
+        per_facility_encounters: dict[int, set[str]] = {fid: set() for fid in all_facilities}
+        for enc_id, fid in encounter_facilities.items():
+            per_facility_encounters[fid].add(enc_id)
+
+        # ── Phase A: patients + encounters — error injection, ground truth, write ──
+        task_a = progress.add_task(
+            "[cyan]Phase A: patients & encounters...", total=num_facilities
         )
 
         data_splitter = DataSplitter()
@@ -254,30 +275,30 @@ def run_augmentation_pipeline(
             config.error_injection, random_seed=config.random_seed
         )
         ground_truth_tracker = GroundTruthTracker()
-        validator = DataValidator() if validate else None
         all_error_logs = []
-        validation_errors = []
 
         for facility_id in all_facilities:
-            # Split: extract this facility's data from synthea_csvs
-            facility_data = data_splitter.create_facility_csvs(
-                facility_id, synthea_csvs, patient_facilities, encounter_facilities
+            fac_patients = per_facility_patients[facility_id]
+            fac_encounters = per_facility_encounters[facility_id]
+
+            # Filter patients & encounters
+            fac_patients_df = data_splitter.filter_table_for_facility(
+                "patients.csv", patients_df, facility_id, fac_patients, fac_encounters
+            )
+            fac_encounters_df = data_splitter.filter_table_for_facility(
+                "encounters.csv", encounters_df, facility_id, fac_patients, fac_encounters
             )
 
-            # Inject errors
-            patients_facility_df = facility_data["patients.csv"]
+            # Inject errors into patients
             errored_patients_df, error_log = error_injector.inject_errors_into_patients(
-                patients_facility_df, facility_id
+                fac_patients_df, facility_id
             )
-            facility_data["patients.csv"] = errored_patients_df
 
             # Track ground truth
             for _, patient in errored_patients_df.iterrows():
                 patient_uuid = patient["Id"]
-                num_encounters = len(
-                    facility_data["encounters.csv"][
-                        facility_data["encounters.csv"]["PATIENT"] == patient_uuid
-                    ]
+                num_enc = len(
+                    fac_encounters_df[fac_encounters_df["PATIENT"] == patient_uuid]
                 )
                 patient_errors = [
                     err["error_type"]
@@ -287,7 +308,7 @@ def run_augmentation_pipeline(
                 ground_truth_tracker.add_patient_facility_mapping(
                     patient_uuid,
                     facility_id,
-                    num_encounters,
+                    num_enc,
                     patient.to_dict(),
                     patient_errors,
                 )
@@ -295,34 +316,138 @@ def run_augmentation_pipeline(
             ground_truth_tracker.add_error_records(error_log)
             all_error_logs.extend(error_log)
 
-            # Write immediately
-            data_handler.write_facility_data(
-                facility_data, output_dir / "facilities", facility_id
+            # Write patients (with errors) and encounters
+            data_handler.write_facility_table(
+                errored_patients_df, facilities_dir, facility_id, "patients.csv"
+            )
+            data_handler.write_facility_table(
+                fac_encounters_df, facilities_dir, facility_id, "encounters.csv"
             )
 
-            # Validate immediately
-            if validator:
-                is_valid, errors = validator.validate_facility_csvs(facility_data)
-                if not is_valid:
-                    validation_errors.extend(
-                        [f"Facility {facility_id}: {err}" for err in errors]
-                    )
+            # Write organizations (reference table — same for all)
+            data_handler.write_facility_table(
+                organizations_df, facilities_dir, facility_id, "organizations.csv"
+            )
 
-            progress.update(task_main, advance=1)
-            # facility_data goes out of scope here → memory freed
+            progress.update(task_a, advance=1)
 
-        # Free source data (no longer needed)
-        del synthea_csvs
+        # Free core tables
+        del patients_df, encounters_df, organizations_df
 
+        elapsed_a = time.monotonic() - t0
         console.print(
-            f"[green]✓[/green] Split CSVs into {num_facilities} facility datasets"
+            f"[green]✓[/green] Phase A complete: patients & encounters for "
+            f"{num_facilities} facilities [dim]({elapsed_a:.1f}s)[/dim]"
         )
         error_stats = error_injector.get_error_statistics(all_error_logs)
         console.print(
             f"[green]✓[/green] Applied {error_stats['total_errors']} demographic errors"
         )
 
+        # ── Phase B: stream remaining tables one at a time ──
+        # Order matters: claims before claims_transactions, encounters already on disk.
+        phase_b_tables = [
+            "conditions.csv",
+            "medications.csv",
+            "observations.csv",
+            "procedures.csv",
+            "immunizations.csv",
+            "allergies.csv",
+            "careplans.csv",
+            "imaging_studies.csv",
+            "devices.csv",
+            "supplies.csv",
+            "providers.csv",
+            "payers.csv",
+            "claims.csv",
+            "claims_transactions.csv",
+            "payer_transitions.csv",
+        ]
+
+        task_b = progress.add_task(
+            "[cyan]Phase B: streaming tables...", total=len(phase_b_tables)
+        )
+
+        # Track per-facility claim IDs (populated when we process claims.csv)
+        per_facility_claim_ids: dict[int, set[str]] = {fid: set() for fid in all_facilities}
+
+        for table_name in phase_b_tables:
+            file_path = input_dir / table_name
+            if not file_path.exists():
+                progress.update(task_b, advance=1)
+                continue
+
+            short_name = table_name.replace(".csv", "")
+            progress.update(
+                task_b,
+                description=f"[cyan]Phase B: {short_name}...",
+            )
+            source_df = data_handler.load_single_csv(input_dir, table_name)
+            mem_mb = source_df.memory_usage(deep=True).sum() / 1_048_576
+            console.print(
+                f"  [dim]{short_name}: {len(source_df):,} rows, "
+                f"{mem_mb:.0f} MB[/dim]"
+            )
+
+            for facility_id in all_facilities:
+                fac_patients = per_facility_patients[facility_id]
+                fac_encounters = per_facility_encounters[facility_id]
+
+                # payer_transitions needs facility encounters DataFrame
+                fac_encounters_df = None
+                if table_name == "payer_transitions.csv":
+                    fac_encounters_df = data_handler.read_facility_table(
+                        facilities_dir, facility_id, "encounters.csv"
+                    )
+
+                subset = data_splitter.filter_table_for_facility(
+                    table_name,
+                    source_df,
+                    facility_id,
+                    fac_patients,
+                    fac_encounters,
+                    facility_encounters_df=fac_encounters_df,
+                    facility_claim_ids=per_facility_claim_ids.get(facility_id),
+                )
+
+                # Capture claim IDs after filtering claims.csv
+                if table_name == "claims.csv" and len(subset) > 0:
+                    per_facility_claim_ids[facility_id] = set(subset["Id"].values)
+
+                data_handler.write_facility_table(
+                    subset, facilities_dir, facility_id, table_name
+                )
+
+            del source_df
+            progress.update(task_b, advance=1)
+
+        del per_facility_claim_ids
+        elapsed_b = time.monotonic() - t0
+        console.print(
+            f"[green]✓[/green] Phase B complete: streamed {len(phase_b_tables)} tables "
+            f"[dim]({elapsed_b:.1f}s)[/dim]"
+        )
+
+        # ── Phase C: validation ──
+        validation_errors = []
         if validate:
+            task_c = progress.add_task(
+                "[cyan]Phase C: validating...", total=num_facilities
+            )
+            validator = DataValidator()
+
+            for facility_id in all_facilities:
+                facility_data = data_handler.read_all_facility_tables(
+                    facilities_dir, facility_id
+                )
+                is_valid, errors = validator.validate_facility_csvs(facility_data)
+                if not is_valid:
+                    validation_errors.extend(
+                        [f"Facility {facility_id}: {err}" for err in errors]
+                    )
+                del facility_data
+                progress.update(task_c, advance=1)
+
             if validation_errors:
                 console.print("\n[yellow]⚠ Validation warnings:[/yellow]")
                 for error in validation_errors[:10]:
@@ -330,8 +455,8 @@ def run_augmentation_pipeline(
             else:
                 console.print("[green]✓[/green] All validations passed")
 
-        # Write metadata
-        task_meta = progress.add_task("[cyan]Writing metadata...", total=5)
+        # ── Phase D: metadata ──
+        task_meta = progress.add_task("[cyan]Phase D: writing metadata...", total=5)
 
         metadata_dir = output_dir / "metadata"
         metadata_dir.mkdir(parents=True, exist_ok=True)
@@ -364,7 +489,11 @@ def run_augmentation_pipeline(
         )
         progress.update(task_meta, advance=1)
 
-        console.print(f"[green]✓[/green] Output written to {output_dir}")
+        elapsed_total = time.monotonic() - t0
+        console.print(
+            f"[green]✓[/green] Output written to {output_dir} "
+            f"[dim](total {elapsed_total:.1f}s)[/dim]"
+        )
 
     # Display final summary
     display_summary(assignment_stats, error_stats, ground_truth_stats)
