@@ -1,4 +1,4 @@
-"""Data reading and writing utilities for Synthea CSV input and Parquet output."""
+"""Data reading and writing utilities for Parquet-based pipeline."""
 
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
@@ -7,243 +7,118 @@ import pandas as pd
 
 
 class DataHandler:
-    """Reads Synthea CSV input and writes facility Parquet output."""
+    """Reads and writes facility Parquet data."""
 
-    # Standard CSV files in Synthea output
-    SYNTHEA_CSV_FILES = [
-        "patients.csv",
-        "encounters.csv",
-        "conditions.csv",
-        "medications.csv",
-        "observations.csv",
-        "procedures.csv",
-        "immunizations.csv",
-        "allergies.csv",
-        "careplans.csv",
-        "imaging_studies.csv",
-        "devices.csv",
-        "supplies.csv",
-        "claims.csv",
-        "claims_transactions.csv",
-        "payer_transitions.csv",
-        "organizations.csv",
-        "providers.csv",
-        "payers.csv",
+    # Standard tables in Synthea output (plain names, no extensions)
+    SYNTHEA_TABLES = [
+        "patients",
+        "encounters",
+        "conditions",
+        "medications",
+        "observations",
+        "procedures",
+        "immunizations",
+        "allergies",
+        "careplans",
+        "imaging_studies",
+        "devices",
+        "supplies",
+        "claims",
+        "claims_transactions",
+        "payer_transitions",
+        "organizations",
+        "providers",
+        "payers",
     ]
 
     # Reference tables (copied to all facilities unchanged)
     REFERENCE_TABLES = [
-        "organizations.csv",
-        "providers.csv",
-        "payers.csv",
+        "organizations",
+        "providers",
+        "payers",
     ]
 
     # Tables with PATIENT foreign key
     PATIENT_LINKED_TABLES = [
-        "encounters.csv",
-        "payer_transitions.csv",
+        "encounters",
+        "payer_transitions",
     ]
 
     # Tables with ENCOUNTER foreign key
     ENCOUNTER_LINKED_TABLES = [
-        "conditions.csv",
-        "medications.csv",
-        "observations.csv",
-        "procedures.csv",
-        "immunizations.csv",
-        "allergies.csv",
-        "careplans.csv",
-        "imaging_studies.csv",
-        "devices.csv",
-        "supplies.csv",
+        "conditions",
+        "medications",
+        "observations",
+        "procedures",
+        "immunizations",
+        "allergies",
+        "careplans",
+        "imaging_studies",
+        "devices",
+        "supplies",
     ]
 
-    @staticmethod
-    def read_csv(
-        file_path: Path,
-        dtype: Optional[Dict] = None,
-        parse_dates: Optional[List[str]] = None,
-    ) -> pd.DataFrame:
-        """
-        Read CSV file with standard settings.
-
-        Args:
-            file_path: Path to CSV file
-            dtype: Optional dtype specifications
-            parse_dates: Optional list of date columns to parse
-
-        Returns:
-            DataFrame with CSV contents
-        """
-        if not file_path.exists():
-            raise FileNotFoundError(f"CSV file not found: {file_path}")
-
-        return pd.read_csv(
-            file_path,
-            dtype=dtype,
-            parse_dates=parse_dates,
-            low_memory=False,
-        )
-
-    @staticmethod
-    def write_csv(df: pd.DataFrame, file_path: Path, create_dirs: bool = True) -> None:
-        """
-        Write DataFrame to CSV with standard settings.
-
-        Args:
-            df: DataFrame to write
-            file_path: Output path
-            create_dirs: Create parent directories if they don't exist
-        """
-        if create_dirs:
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        df.to_csv(file_path, index=False)
-
     @classmethod
-    def load_synthea_csvs(cls, input_dir: Path) -> Dict[str, pd.DataFrame]:
-        """
-        Load all Synthea CSV files from directory.
-
-        Args:
-            input_dir: Directory containing Synthea CSV files
-
-        Returns:
-            Dictionary mapping filename to DataFrame
-        """
-        if not input_dir.exists():
-            raise FileNotFoundError(f"Input directory not found: {input_dir}")
-
-        csvs = {}
-        for filename in cls.SYNTHEA_CSV_FILES:
-            file_path = input_dir / filename
-            if file_path.exists():
-                # Parse date columns for relevant files
-                parse_dates = None
-                if filename == "encounters.csv":
-                    parse_dates = ["START", "STOP"]
-                elif filename == "payer_transitions.csv":
-                    parse_dates = ["START_DATE", "END_DATE"]
-                elif filename == "patients.csv":
-                    parse_dates = ["BIRTHDATE", "DEATHDATE"]
-
-                csvs[filename] = cls.read_csv(file_path, parse_dates=parse_dates)
-
-                # Strip Synthea numbers from name fields in patients.csv
-                if filename == "patients.csv":
-                    csvs[filename] = cls._strip_synthea_numbers(csvs[filename])
-            else:
-                raise FileNotFoundError(f"Required CSV file not found: {file_path}")
-
-        return csvs
-
-    # Date columns to parse per file
-    _DATE_COLUMNS: Dict[str, List[str]] = {
-        "encounters.csv": ["START", "STOP"],
-        "payer_transitions.csv": ["START_DATE", "END_DATE"],
-        "patients.csv": ["BIRTHDATE", "DEATHDATE"],
-    }
-
-    @classmethod
-    def _resolve_parse_dates(
-        cls, filename: str, usecols: Optional[List[str]] = None
-    ) -> Optional[List[str]]:
-        """Return parse_dates list, filtered to usecols if given."""
-        date_cols = cls._DATE_COLUMNS.get(filename)
-        if not date_cols:
-            return None
-        if usecols is not None:
-            date_cols = [c for c in date_cols if c in usecols]
-        return date_cols or None
-
-    @classmethod
-    def load_single_csv(
+    def load_table(
         cls,
         input_dir: Path,
-        filename: str,
-        usecols: Optional[List[str]] = None,
+        table_name: str,
+        columns: Optional[List[str]] = None,
     ) -> pd.DataFrame:
         """
-        Load one Synthea CSV file with standard date parsing and name stripping.
+        Load a single Parquet table.
 
         Args:
-            input_dir: Directory containing Synthea CSV files
-            filename: CSV filename (e.g. 'patients.csv')
-            usecols: Optional list of columns to load (reduces memory)
+            input_dir: Directory containing Parquet files
+            table_name: Table name (e.g. 'patients')
+            columns: Optional list of columns to load (reduces memory)
 
         Returns:
-            DataFrame with CSV contents
+            DataFrame with table contents
         """
-        file_path = input_dir / filename
-        if not file_path.exists():
-            raise FileNotFoundError(f"Required CSV file not found: {file_path}")
-
-        parse_dates = cls._resolve_parse_dates(filename, usecols)
-
-        # low_memory=False gives better type inference but buffers the full file.
-        # When usecols limits columns, use True to avoid peak-memory spike.
-        df = pd.read_csv(
-            file_path,
-            parse_dates=parse_dates,
-            low_memory=usecols is not None,
-            **({"usecols": usecols} if usecols else {}),
-        )
-
-        if filename == "patients.csv":
-            df = cls._strip_synthea_numbers(df)
-
-        return df
+        parquet_path = input_dir / f"{table_name}.parquet"
+        if not parquet_path.exists():
+            raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+        return pd.read_parquet(parquet_path, columns=columns)
 
     @classmethod
-    def stream_csv_chunks(
+    def stream_table_chunks(
         cls,
         input_dir: Path,
-        filename: str,
+        table_name: str,
         chunksize: int = 500_000,
-        usecols: Optional[List[str]] = None,
+        columns: Optional[List[str]] = None,
     ) -> Iterator[pd.DataFrame]:
         """
-        Yield DataFrames chunk by chunk from a Synthea CSV file.
-
-        Uses the same date parsing as load_single_csv but reads incrementally
-        so that large files never fully reside in memory.
+        Yield DataFrames chunk by chunk from a Parquet file.
 
         Args:
-            input_dir: Directory containing Synthea CSV files
-            filename: CSV filename
+            input_dir: Directory containing Parquet files
+            table_name: Table name (e.g. 'encounters')
             chunksize: Number of rows per chunk
-            usecols: Optional list of columns to load (reduces memory per chunk)
+            columns: Optional list of columns to load
 
         Yields:
             DataFrame chunks
         """
-        file_path = input_dir / filename
-        if not file_path.exists():
-            raise FileNotFoundError(f"Required CSV file not found: {file_path}")
+        import pyarrow.parquet as pq
 
-        parse_dates = cls._resolve_parse_dates(filename, usecols)
+        parquet_path = input_dir / f"{table_name}.parquet"
+        if not parquet_path.exists():
+            raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
 
-        reader = pd.read_csv(
-            file_path,
-            parse_dates=parse_dates,
-            low_memory=True,
-            chunksize=chunksize,
-            **({"usecols": usecols} if usecols else {}),
-        )
-
-        for chunk in reader:
-            if filename == "patients.csv":
-                chunk = cls._strip_synthea_numbers(chunk)
-            yield chunk
+        pf = pq.ParquetFile(str(parquet_path))
+        for batch in pf.iter_batches(batch_size=chunksize, columns=columns):
+            yield batch.to_pandas()
 
     @classmethod
     def facility_parquet_path(
-        cls, output_dir: Path, facility_id: int, filename: str
+        cls, output_dir: Path, facility_id: int, table_name: str
     ) -> Path:
         """Return the Parquet path for a facility table, creating dirs as needed."""
         facility_dir = output_dir / f"facility_{facility_id:03d}"
         facility_dir.mkdir(parents=True, exist_ok=True)
-        return facility_dir / Path(filename).with_suffix(".parquet").name
+        return facility_dir / f"{table_name}.parquet"
 
     @classmethod
     def write_facility_table(
@@ -251,7 +126,7 @@ class DataHandler:
         df: pd.DataFrame,
         output_dir: Path,
         facility_id: int,
-        filename: str,
+        table_name: str,
     ) -> None:
         """
         Write one Parquet table for one facility.
@@ -260,19 +135,18 @@ class DataHandler:
             df: DataFrame to write
             output_dir: Base output directory (parent of facility_NNN dirs)
             facility_id: Facility identifier
-            filename: Original CSV filename (e.g. 'patients.csv')
+            table_name: Table name (e.g. 'patients')
         """
         facility_dir = output_dir / f"facility_{facility_id:03d}"
         facility_dir.mkdir(parents=True, exist_ok=True)
-        parquet_name = Path(filename).with_suffix(".parquet").name
-        df.to_parquet(facility_dir / parquet_name, index=False)
+        df.to_parquet(facility_dir / f"{table_name}.parquet", index=False)
 
     @classmethod
     def read_facility_table(
         cls,
         output_dir: Path,
         facility_id: int,
-        filename: str,
+        table_name: str,
     ) -> pd.DataFrame:
         """
         Read one Parquet file back for a facility.
@@ -280,14 +154,13 @@ class DataHandler:
         Args:
             output_dir: Base output directory (parent of facility_NNN dirs)
             facility_id: Facility identifier
-            filename: Original CSV filename (e.g. 'encounters.csv')
+            table_name: Table name (e.g. 'encounters')
 
         Returns:
             DataFrame with Parquet contents
         """
         facility_dir = output_dir / f"facility_{facility_id:03d}"
-        parquet_name = Path(filename).with_suffix(".parquet").name
-        parquet_path = facility_dir / parquet_name
+        parquet_path = facility_dir / f"{table_name}.parquet"
         if not parquet_path.exists():
             raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
         return pd.read_parquet(parquet_path)
@@ -306,21 +179,20 @@ class DataHandler:
             facility_id: Facility identifier
 
         Returns:
-            Dictionary mapping original CSV filename to DataFrame
+            Dictionary mapping table name to DataFrame
         """
         facility_dir = output_dir / f"facility_{facility_id:03d}"
         result = {}
-        for filename in cls.SYNTHEA_CSV_FILES:
-            parquet_name = Path(filename).with_suffix(".parquet").name
-            parquet_path = facility_dir / parquet_name
+        for table_name in cls.SYNTHEA_TABLES:
+            parquet_path = facility_dir / f"{table_name}.parquet"
             if parquet_path.exists():
-                result[filename] = pd.read_parquet(parquet_path)
+                result[table_name] = pd.read_parquet(parquet_path)
         return result
 
     @classmethod
     def write_facility_data(
         cls,
-        facility_csvs: Dict[str, pd.DataFrame],
+        facility_tables: Dict[str, pd.DataFrame],
         output_dir: Path,
         facility_id: int,
     ) -> None:
@@ -328,18 +200,15 @@ class DataHandler:
         Write all data files for a facility as Parquet.
 
         Args:
-            facility_csvs: Dictionary mapping filename (e.g. 'patients.csv') to DataFrame
+            facility_tables: Dictionary mapping table name to DataFrame
             output_dir: Base output directory
             facility_id: Facility identifier
         """
         facility_dir = output_dir / f"facility_{facility_id:03d}"
         facility_dir.mkdir(parents=True, exist_ok=True)
 
-        for filename, df in facility_csvs.items():
-            # Convert .csv key to .parquet extension
-            parquet_name = Path(filename).with_suffix(".parquet").name
-            parquet_path = facility_dir / parquet_name
-            df.to_parquet(parquet_path, index=False)
+        for table_name, df in facility_tables.items():
+            df.to_parquet(facility_dir / f"{table_name}.parquet", index=False)
 
     @classmethod
     def get_patient_ids(cls, df: pd.DataFrame, table_name: str) -> pd.Series:
@@ -348,16 +217,16 @@ class DataHandler:
 
         Args:
             df: DataFrame to extract from
-            table_name: Name of the table (for determining column name)
+            table_name: Name of the table
 
         Returns:
             Series of patient UUIDs
         """
-        if table_name == "patients.csv":
+        if table_name == "patients":
             return df["Id"]
         elif "PATIENT" in df.columns:
             return df["PATIENT"]
-        elif "PATIENTID" in df.columns:  # claims.csv uses PATIENTID
+        elif "PATIENTID" in df.columns:  # claims uses PATIENTID
             return df["PATIENTID"]
         else:
             raise ValueError(f"Cannot determine patient ID column for {table_name}")
@@ -374,44 +243,11 @@ class DataHandler:
         Returns:
             Series of encounter UUIDs
         """
-        if table_name == "encounters.csv":
+        if table_name == "encounters":
             return df["Id"]
         elif "ENCOUNTER" in df.columns:
             return df["ENCOUNTER"]
-        elif "APPOINTMENTID" in df.columns:  # claims.csv uses APPOINTMENTID
+        elif "APPOINTMENTID" in df.columns:  # claims uses APPOINTMENTID
             return df["APPOINTMENTID"]
         else:
             raise ValueError(f"Cannot determine encounter ID column for {table_name}")
-
-    @staticmethod
-    def _strip_synthea_numbers(patients_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Strip Synthea-generated numbers from name fields.
-
-        Synthea appends numbers to names for uniqueness (e.g., "Nathan164" → "Nathan").
-        We strip these to create realistic name collisions for entity resolution.
-
-        Args:
-            patients_df: Patients DataFrame with Synthea name fields
-
-        Returns:
-            DataFrame with numbers removed from name fields
-        """
-        df = patients_df.copy()
-
-        name_fields = ["FIRST", "LAST", "MAIDEN"]
-
-        for field in name_fields:
-            if field in df.columns:
-                mask = df[field].notna()
-                # Vectorized: remove digits and normalize whitespace in one pass
-                stripped = (
-                    df.loc[mask, field]
-                    .astype(str)
-                    .str.replace(r"\d+", "", regex=True)
-                    .str.strip()
-                    .str.replace(r"\s+", " ", regex=True)
-                )
-                df.loc[mask, field] = stripped
-
-        return df

@@ -14,58 +14,58 @@ class DataSplitter:
         """Initialize data splitter."""
         self.data_handler = DataHandler()
 
-    def split_csvs_by_facility(
+    def split_tables_by_facility(
         self,
-        synthea_csvs: Dict[str, pd.DataFrame],
+        synthea_tables: Dict[str, pd.DataFrame],
         patient_facilities: Dict[str, List[int]],
         encounter_facilities: Dict[str, int],
     ) -> Dict[int, Dict[str, pd.DataFrame]]:
         """
-        Partition all CSVs by facility.
+        Partition all tables by facility.
 
         Args:
-            synthea_csvs: Dictionary of all Synthea CSV DataFrames
+            synthea_tables: Dictionary of all Synthea DataFrames
             patient_facilities: Dict[patient_uuid -> List[facility_ids]]
             encounter_facilities: Dict[encounter_uuid -> facility_id]
 
         Returns:
-            Dict[facility_id -> Dict[filename -> DataFrame]]
+            Dict[facility_id -> Dict[table_name -> DataFrame]]
         """
         # Get list of all facilities
         all_facilities = set()
         for facilities in patient_facilities.values():
             all_facilities.update(facilities)
 
-        facility_csvs = {}
+        facility_tables = {}
 
         for facility_id in sorted(all_facilities):
-            facility_csvs[facility_id] = self.create_facility_csvs(
+            facility_tables[facility_id] = self.create_facility_tables(
                 facility_id,
-                synthea_csvs,
+                synthea_tables,
                 patient_facilities,
                 encounter_facilities,
             )
 
-        return facility_csvs
+        return facility_tables
 
-    def create_facility_csvs(
+    def create_facility_tables(
         self,
         facility_id: int,
-        synthea_csvs: Dict[str, pd.DataFrame],
+        synthea_tables: Dict[str, pd.DataFrame],
         patient_facilities: Dict[str, List[int]],
         encounter_facilities: Dict[str, int],
     ) -> Dict[str, pd.DataFrame]:
         """
-        Create all CSV files for a specific facility.
+        Create all tables for a specific facility.
 
         Args:
             facility_id: Facility identifier
-            synthea_csvs: All source CSVs
+            synthea_tables: All source tables
             patient_facilities: Patient to facilities mapping
             encounter_facilities: Encounter to facility mapping
 
         Returns:
-            Dict[filename -> DataFrame] for this facility
+            Dict[table_name -> DataFrame] for this facility
         """
         facility_data = {}
 
@@ -83,60 +83,60 @@ class DataSplitter:
             if facility_id in facilities
         }
 
-        # Step 3: Process each CSV type
-        for filename, df in synthea_csvs.items():
-            if filename in self.data_handler.REFERENCE_TABLES:
+        # Step 3: Process each table type
+        for table_name, df in synthea_tables.items():
+            if table_name in self.data_handler.REFERENCE_TABLES:
                 # Reference tables: copy complete table to all facilities
-                facility_data[filename] = df.copy()
+                facility_data[table_name] = df.copy()
 
-            elif filename == "patients.csv":
+            elif table_name == "patients":
                 # Patients: include all who have encounters at this facility
-                facility_data[filename] = df[df["Id"].isin(facility_patients)].copy()
+                facility_data[table_name] = df[df["Id"].isin(facility_patients)].copy()
 
-            elif filename == "encounters.csv":
+            elif table_name == "encounters":
                 # Encounters: filter by facility assignment
-                facility_data[filename] = df[df["Id"].isin(facility_encounters)].copy()
+                facility_data[table_name] = df[df["Id"].isin(facility_encounters)].copy()
 
-            elif filename in self.data_handler.ENCOUNTER_LINKED_TABLES:
+            elif table_name in self.data_handler.ENCOUNTER_LINKED_TABLES:
                 # Encounter-linked tables: follow encounter assignment
-                facility_data[filename] = df[
+                facility_data[table_name] = df[
                     df["ENCOUNTER"].isin(facility_encounters)
                 ].copy()
 
-            elif filename == "claims.csv":
+            elif table_name == "claims":
                 # Claims: linked via APPOINTMENTID (encounter)
-                facility_data[filename] = df[
+                facility_data[table_name] = df[
                     df["APPOINTMENTID"].isin(facility_encounters)
                 ].copy()
 
-            elif filename == "claims_transactions.csv":
+            elif table_name == "claims_transactions":
                 # Claims transactions: follow parent claims
-                if "claims.csv" in facility_data:
-                    facility_claim_ids = set(facility_data["claims.csv"]["Id"].values)
-                    facility_data[filename] = df[
+                if "claims" in facility_data:
+                    facility_claim_ids = set(facility_data["claims"]["Id"].values)
+                    facility_data[table_name] = df[
                         df["CLAIMID"].isin(facility_claim_ids)
                     ].copy()
                 else:
-                    facility_data[filename] = pd.DataFrame(columns=df.columns)
+                    facility_data[table_name] = pd.DataFrame(columns=df.columns)
 
-            elif filename == "payer_transitions.csv":
+            elif table_name == "payer_transitions":
                 # Payer transitions: temporal split based on encounter date range
-                facility_data[filename] = self._split_payer_transitions_temporally(
-                    df, facility_patients, facility_data["encounters.csv"]
+                facility_data[table_name] = self._split_payer_transitions_temporally(
+                    df, facility_patients, facility_data["encounters"]
                 )
 
             else:
                 # Unknown table type - skip with warning
                 print(
-                    f"Warning: Unknown table type {filename}, skipping for facility {facility_id}"
+                    f"Warning: Unknown table type {table_name}, skipping for facility {facility_id}"
                 )
-                facility_data[filename] = pd.DataFrame(columns=df.columns)
+                facility_data[table_name] = pd.DataFrame(columns=df.columns)
 
         return facility_data
 
     def filter_table_for_facility(
         self,
-        filename: str,
+        table_name: str,
         df: pd.DataFrame,
         facility_id: int,
         facility_patients: Set[str],
@@ -149,11 +149,11 @@ class DataSplitter:
         """
         Filter a single source table for one facility.
 
-        Same logic as the inner loop of create_facility_csvs, but operates on
+        Same logic as the inner loop of create_facility_tables, but operates on
         one table at a time for streaming use.
 
         Args:
-            filename: CSV filename (e.g. 'conditions.csv')
+            table_name: Table name (e.g. 'conditions')
             df: Full source DataFrame for this table
             facility_id: Facility identifier
             facility_patients: Set of patient UUIDs at this facility
@@ -164,6 +164,8 @@ class DataSplitter:
                 (required for claims_transactions)
             copy: Whether to copy filtered results (default True). Pass False
                 when the caller discards the original (e.g. streaming chunks).
+            patient_date_ranges: Optional pre-computed date ranges (PATIENT,
+                min_date, max_date).
 
         Returns:
             Filtered DataFrame for this facility
@@ -172,28 +174,28 @@ class DataSplitter:
         def _maybe_copy(result: pd.DataFrame) -> pd.DataFrame:
             return result.copy() if copy else result
 
-        if filename in self.data_handler.REFERENCE_TABLES:
+        if table_name in self.data_handler.REFERENCE_TABLES:
             return _maybe_copy(df)
 
-        elif filename == "patients.csv":
+        elif table_name == "patients":
             return _maybe_copy(df[df["Id"].isin(facility_patients)])
 
-        elif filename == "encounters.csv":
+        elif table_name == "encounters":
             return _maybe_copy(df[df["Id"].isin(facility_encounters)])
 
-        elif filename in self.data_handler.ENCOUNTER_LINKED_TABLES:
+        elif table_name in self.data_handler.ENCOUNTER_LINKED_TABLES:
             return _maybe_copy(df[df["ENCOUNTER"].isin(facility_encounters)])
 
-        elif filename == "claims.csv":
+        elif table_name == "claims":
             return _maybe_copy(df[df["APPOINTMENTID"].isin(facility_encounters)])
 
-        elif filename == "claims_transactions.csv":
+        elif table_name == "claims_transactions":
             if facility_claim_ids:
                 return _maybe_copy(df[df["CLAIMID"].isin(facility_claim_ids)])
             else:
                 return pd.DataFrame(columns=df.columns)
 
-        elif filename == "payer_transitions.csv":
+        elif table_name == "payer_transitions":
             if facility_encounters_df is not None or patient_date_ranges is not None:
                 return self._split_payer_transitions_temporally(
                     df,
@@ -206,7 +208,7 @@ class DataSplitter:
 
         else:
             print(
-                f"Warning: Unknown table type {filename}, "
+                f"Warning: Unknown table type {table_name}, "
                 f"skipping for facility {facility_id}"
             )
             return pd.DataFrame(columns=df.columns)

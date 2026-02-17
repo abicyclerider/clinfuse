@@ -3,18 +3,20 @@ generate:
   seed: 67890
 
 augment:
-  random_seed: 99
+  assignment_seed: 99
+  error_seed: 99
 
 resolve:
   auto_match_probability: 0.95
   auto_reject_probability: 0.05
 
 generate_training:
-  population: 500
+  population: 100000
   seed: 12345
 
 augment_training:
-  random_seed: 42
+  assignment_seed: 42
+  error_seed: 42
 
 prepare_dataset:
   seed: 42

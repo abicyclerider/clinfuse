@@ -146,10 +146,10 @@ def create_sample_organizations() -> pd.DataFrame:
     return pd.DataFrame(orgs)
 
 
-def create_sample_synthea_csvs(
+def create_sample_synthea_tables(
     num_patients: int = 10, encounters_per_patient: int = 10
 ) -> dict:
-    """Create a complete set of sample Synthea CSVs."""
+    """Create a complete set of sample Synthea tables."""
     patients_df = create_sample_patients(num_patients)
     encounters_df = create_sample_encounters(patients_df, encounters_per_patient)
     conditions_df = create_sample_conditions(encounters_df)
@@ -158,7 +158,7 @@ def create_sample_synthea_csvs(
 
     # Create minimal dataframes for other required tables
     empty_columns = {
-        "medications.csv": [
+        "medications": [
             "START",
             "STOP",
             "PATIENT",
@@ -166,7 +166,7 @@ def create_sample_synthea_csvs(
             "CODE",
             "DESCRIPTION",
         ],
-        "procedures.csv": [
+        "procedures": [
             "START",
             "STOP",
             "PATIENT",
@@ -174,7 +174,7 @@ def create_sample_synthea_csvs(
             "CODE",
             "DESCRIPTION",
         ],
-        "observations.csv": [
+        "observations": [
             "DATE",
             "PATIENT",
             "ENCOUNTER",
@@ -183,8 +183,8 @@ def create_sample_synthea_csvs(
             "VALUE",
             "UNITS",
         ],
-        "immunizations.csv": ["DATE", "PATIENT", "ENCOUNTER", "CODE", "DESCRIPTION"],
-        "allergies.csv": [
+        "immunizations": ["DATE", "PATIENT", "ENCOUNTER", "CODE", "DESCRIPTION"],
+        "allergies": [
             "START",
             "STOP",
             "PATIENT",
@@ -192,7 +192,7 @@ def create_sample_synthea_csvs(
             "CODE",
             "DESCRIPTION",
         ],
-        "careplans.csv": [
+        "careplans": [
             "START",
             "STOP",
             "PATIENT",
@@ -200,25 +200,25 @@ def create_sample_synthea_csvs(
             "CODE",
             "DESCRIPTION",
         ],
-        "imaging_studies.csv": ["Id", "DATE", "PATIENT", "ENCOUNTER"],
-        "devices.csv": ["START", "STOP", "PATIENT", "ENCOUNTER", "CODE", "DESCRIPTION"],
-        "supplies.csv": ["DATE", "PATIENT", "ENCOUNTER", "CODE", "DESCRIPTION"],
-        "claims.csv": ["Id", "PATIENTID", "APPOINTMENTID"],
-        "claims_transactions.csv": ["Id", "CLAIMID"],
-        "providers.csv": ["Id", "ORGANIZATION", "NAME"],
-        "payers.csv": ["Id", "NAME"],
+        "imaging_studies": ["Id", "DATE", "PATIENT", "ENCOUNTER"],
+        "devices": ["START", "STOP", "PATIENT", "ENCOUNTER", "CODE", "DESCRIPTION"],
+        "supplies": ["DATE", "PATIENT", "ENCOUNTER", "CODE", "DESCRIPTION"],
+        "claims": ["Id", "PATIENTID", "APPOINTMENTID"],
+        "claims_transactions": ["Id", "CLAIMID"],
+        "providers": ["Id", "ORGANIZATION", "NAME"],
+        "payers": ["Id", "NAME"],
     }
 
-    csvs = {
-        "patients.csv": patients_df,
-        "encounters.csv": encounters_df,
-        "conditions.csv": conditions_df,
-        "payer_transitions.csv": payer_transitions_df,
-        "organizations.csv": organizations_df,
+    tables = {
+        "patients": patients_df,
+        "encounters": encounters_df,
+        "conditions": conditions_df,
+        "payer_transitions": payer_transitions_df,
+        "organizations": organizations_df,
     }
 
     # Add empty dataframes for other tables
-    for filename, columns in empty_columns.items():
-        csvs[filename] = pd.DataFrame(columns=columns)
+    for table_name, columns in empty_columns.items():
+        tables[table_name] = pd.DataFrame(columns=columns)
 
-    return csvs
+    return tables

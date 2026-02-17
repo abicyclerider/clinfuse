@@ -22,7 +22,10 @@ stages:
     deps:
     - augmentation/Dockerfile
     - augmentation/requirements-runtime.txt
-    - augmentation/cli/augment.py
+    - augmentation/cli/csv_to_parquet.py
+    - augmentation/cli/segment.py
+    - augmentation/cli/inject_errors.py
+    - augmentation/core/streaming.py
     - augmentation/config/default_config.yaml
     outs:
     - .build/augmentation.iid:
@@ -78,20 +81,55 @@ stages:
     - synthea_runner/output/synthea_raw/csv:
         cache: false
 
-  augment:
+  csv_to_parquet:
     cmd: >-
-      rm -rf output/augmented &&
-      docker run --rm
+      rm -rf synthea_runner/output/synthea_parquet &&
+      docker run --rm --entrypoint python
       -v $(pwd)/synthea_runner/output/synthea_raw/csv:/data/input:ro
-      -v $(pwd)/output/augmented:/data/output
+      -v $(pwd)/synthea_runner/output/synthea_parquet:/data/output
       augmentation
-      --input /data/input
-      --output /data/output
-      --random-seed ${augment.random_seed}
-    params:
-    - augment.random_seed
+      -m augmentation.cli.csv_to_parquet
+      --input /data/input --output /data/output
     deps:
     - synthea_runner/output/synthea_raw/csv
+    - .build/augmentation.iid
+    outs:
+    - synthea_runner/output/synthea_parquet:
+        cache: false
+
+  segment:
+    cmd: >-
+      rm -rf output/segmented &&
+      docker run --rm --entrypoint python
+      -v $(pwd)/synthea_runner/output/synthea_parquet:/data/input:ro
+      -v $(pwd)/output/segmented:/data/output
+      augmentation
+      -m augmentation.cli.segment
+      --input /data/input --output /data/output
+      --assignment-seed ${augment.assignment_seed}
+    params:
+    - augment.assignment_seed
+    deps:
+    - synthea_runner/output/synthea_parquet
+    - .build/augmentation.iid
+    outs:
+    - output/segmented:
+        cache: false
+
+  inject_errors:
+    cmd: >-
+      rm -rf output/augmented &&
+      docker run --rm --entrypoint python
+      -v $(pwd)/output/segmented:/data/input:ro
+      -v $(pwd)/output/augmented:/data/output
+      augmentation
+      -m augmentation.cli.inject_errors
+      --input /data/input --output /data/output
+      --error-seed ${augment.error_seed}
+    params:
+    - augment.error_seed
+    deps:
+    - output/segmented
     - .build/augmentation.iid
     outs:
     - output/augmented:
@@ -188,20 +226,55 @@ stages:
     - output/training/synthea_raw/csv:
         cache: false
 
-  augment_training:
+  csv_to_parquet_training:
     cmd: >-
-      rm -rf output/training/augmented &&
-      docker run --rm
+      rm -rf output/training/synthea_parquet &&
+      docker run --rm --entrypoint python
       -v $(pwd)/output/training/synthea_raw/csv:/data/input:ro
-      -v $(pwd)/output/training/augmented:/data/output
+      -v $(pwd)/output/training/synthea_parquet:/data/output
       augmentation
-      --input /data/input
-      --output /data/output
-      --random-seed ${augment_training.random_seed}
-    params:
-    - augment_training.random_seed
+      -m augmentation.cli.csv_to_parquet
+      --input /data/input --output /data/output
     deps:
     - output/training/synthea_raw/csv
+    - .build/augmentation.iid
+    outs:
+    - output/training/synthea_parquet:
+        cache: false
+
+  segment_training:
+    cmd: >-
+      rm -rf output/training/segmented &&
+      docker run --rm --entrypoint python
+      -v $(pwd)/output/training/synthea_parquet:/data/input:ro
+      -v $(pwd)/output/training/segmented:/data/output
+      augmentation
+      -m augmentation.cli.segment
+      --input /data/input --output /data/output
+      --assignment-seed ${augment_training.assignment_seed}
+    params:
+    - augment_training.assignment_seed
+    deps:
+    - output/training/synthea_parquet
+    - .build/augmentation.iid
+    outs:
+    - output/training/segmented:
+        cache: false
+
+  inject_errors_training:
+    cmd: >-
+      rm -rf output/training/augmented &&
+      docker run --rm --entrypoint python
+      -v $(pwd)/output/training/segmented:/data/input:ro
+      -v $(pwd)/output/training/augmented:/data/output
+      augmentation
+      -m augmentation.cli.inject_errors
+      --input /data/input --output /data/output
+      --error-seed ${augment_training.error_seed}
+    params:
+    - augment_training.error_seed
+    deps:
+    - output/training/segmented
     - .build/augmentation.iid
     outs:
     - output/training/augmented:

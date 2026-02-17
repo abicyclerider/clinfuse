@@ -19,7 +19,7 @@ from augmentation.core import (
     GroundTruthTracker,
 )
 from augmentation.generators import FacilityGenerator
-from augmentation.tests.fixtures.sample_data import create_sample_synthea_csvs
+from augmentation.tests.fixtures.sample_data import create_sample_synthea_tables
 from augmentation.utils import DataHandler, DataValidator
 
 
@@ -46,9 +46,9 @@ class TestAugmentationPipeline:
         shutil.rmtree(temp_dir)
 
     @pytest.fixture
-    def sample_csvs(self):
-        """Create sample Synthea CSVs."""
-        return create_sample_synthea_csvs(num_patients=10, encounters_per_patient=10)
+    def sample_tables(self):
+        """Create sample Synthea tables."""
+        return create_sample_synthea_tables(num_patients=10, encounters_per_patient=10)
 
     @pytest.fixture
     def config(self, temp_dir):
@@ -72,17 +72,17 @@ class TestAugmentationPipeline:
             random_seed=42,
         )
 
-    def test_end_to_end_pipeline(self, sample_csvs, config, temp_dir):
+    def test_end_to_end_pipeline(self, sample_tables, config, temp_dir):
         """Test the complete augmentation pipeline."""
         # Setup
-        patients_df = sample_csvs["patients.csv"]
-        encounters_df = sample_csvs["encounters.csv"]
+        patients_df = sample_tables["patients"]
+        encounters_df = sample_tables["encounters"]
 
         # Step 1: Generate facilities
         facility_generator = FacilityGenerator(random_seed=42)
         facilities_df = facility_generator.generate_facilities(
             config.facility_distribution.num_facilities,
-            sample_csvs["organizations.csv"],
+            sample_tables["organizations"],
         )
 
         assert len(facilities_df) == 3
@@ -100,39 +100,39 @@ class TestAugmentationPipeline:
         assert len(patient_facilities) == 10
         assert len(encounter_facilities) == 100
 
-        # Step 3: Split CSVs by facility
+        # Step 3: Split tables by facility
         data_splitter = DataSplitter()
-        facility_csvs = data_splitter.split_csvs_by_facility(
-            sample_csvs, patient_facilities, encounter_facilities
+        facility_tables = data_splitter.split_tables_by_facility(
+            sample_tables, patient_facilities, encounter_facilities
         )
 
         # Should have 3 facilities
-        assert len(facility_csvs) == 3
+        assert len(facility_tables) == 3
 
-        # Each facility should have all 18 CSV files
-        for facility_id, csvs in facility_csvs.items():
-            assert "patients.csv" in csvs
-            assert "encounters.csv" in csvs
-            assert "conditions.csv" in csvs
-            assert len(csvs) == 18  # All Synthea CSVs
+        # Each facility should have all 18 tables
+        for facility_id, tables in facility_tables.items():
+            assert "patients" in tables
+            assert "encounters" in tables
+            assert "conditions" in tables
+            assert len(tables) == 18  # All Synthea tables
 
         # Step 4: Inject errors
         error_injector = ErrorInjector(config.error_injection, random_seed=42)
         ground_truth_tracker = GroundTruthTracker()
 
-        for facility_id, csvs in facility_csvs.items():
+        for facility_id, tables in facility_tables.items():
             errored_patients_df, error_log = error_injector.inject_errors_into_patients(
-                csvs["patients.csv"], facility_id
+                tables["patients"], facility_id
             )
 
-            facility_csvs[facility_id]["patients.csv"] = errored_patients_df
+            facility_tables[facility_id]["patients"] = errored_patients_df
 
             # Track ground truth
             for _, patient in errored_patients_df.iterrows():
                 patient_uuid = patient["Id"]
                 num_encounters = len(
-                    csvs["encounters.csv"][
-                        csvs["encounters.csv"]["PATIENT"] == patient_uuid
+                    tables["encounters"][
+                        tables["encounters"]["PATIENT"] == patient_uuid
                     ]
                 )
                 patient_errors = [
@@ -154,17 +154,17 @@ class TestAugmentationPipeline:
         # Step 5: Validate referential integrity
         validator = DataValidator()
 
-        for facility_id, csvs in facility_csvs.items():
-            is_valid, errors = validator.validate_facility_csvs(csvs)
+        for facility_id, tables in facility_tables.items():
+            is_valid, errors = validator.validate_facility_tables(tables)
             assert is_valid, f"Facility {facility_id} validation failed: {errors}"
 
         # Step 6: Write outputs
         data_handler = DataHandler()
         output_dir = temp_dir / "output"
 
-        for facility_id, csvs in facility_csvs.items():
+        for facility_id, tables in facility_tables.items():
             data_handler.write_facility_data(
-                csvs, output_dir / "facilities", facility_id
+                tables, output_dir / "facilities", facility_id
             )
 
         # Verify output files exist
@@ -186,10 +186,10 @@ class TestAugmentationPipeline:
         ground_truth_stats = ground_truth_tracker.generate_statistics()
         assert ground_truth_stats["unique_patients"] == 10
 
-    def test_referential_integrity_maintained(self, sample_csvs, config):
+    def test_referential_integrity_maintained(self, sample_tables, config):
         """Test that referential integrity is maintained across the pipeline."""
-        patients_df = sample_csvs["patients.csv"]
-        encounters_df = sample_csvs["encounters.csv"]
+        patients_df = sample_tables["patients"]
+        encounters_df = sample_tables["encounters"]
 
         # Run through pipeline
         facility_assigner = FacilityAssigner(
@@ -202,36 +202,36 @@ class TestAugmentationPipeline:
         )
 
         data_splitter = DataSplitter()
-        facility_csvs = data_splitter.split_csvs_by_facility(
-            sample_csvs, patient_facilities, encounter_facilities
+        facility_tables = data_splitter.split_tables_by_facility(
+            sample_tables, patient_facilities, encounter_facilities
         )
 
         # Validate each facility
         validator = DataValidator()
 
-        for facility_id, csvs in facility_csvs.items():
-            is_valid, errors = validator.validate_facility_csvs(csvs)
+        for facility_id, tables in facility_tables.items():
+            is_valid, errors = validator.validate_facility_tables(tables)
             assert is_valid, (
                 f"Facility {facility_id} has referential integrity issues: {errors}"
             )
 
             # Manually check key relationships
-            patient_ids = set(csvs["patients.csv"]["Id"].values)
-            encounter_patients = set(csvs["encounters.csv"]["PATIENT"].values)
+            patient_ids = set(tables["patients"]["Id"].values)
+            encounter_patients = set(tables["encounters"]["PATIENT"].values)
 
             # All encounter patients must be in patients table
             assert encounter_patients.issubset(patient_ids)
 
             # All conditions must reference valid encounters
-            if len(csvs["conditions.csv"]) > 0:
-                condition_encounters = set(csvs["conditions.csv"]["ENCOUNTER"].values)
-                encounter_ids = set(csvs["encounters.csv"]["Id"].values)
+            if len(tables["conditions"]) > 0:
+                condition_encounters = set(tables["conditions"]["ENCOUNTER"].values)
+                encounter_ids = set(tables["encounters"]["Id"].values)
                 assert condition_encounters.issubset(encounter_ids)
 
-    def test_patient_appears_at_multiple_facilities(self, sample_csvs, config):
+    def test_patient_appears_at_multiple_facilities(self, sample_tables, config):
         """Test that patients assigned to multiple facilities appear in each."""
-        patients_df = sample_csvs["patients.csv"]
-        encounters_df = sample_csvs["encounters.csv"]
+        patients_df = sample_tables["patients"]
+        encounters_df = sample_tables["encounters"]
 
         # Force all patients to 2 facilities
         config.facility_distribution.facility_count_weights = {1: 0.0, 2: 1.0}
@@ -246,8 +246,8 @@ class TestAugmentationPipeline:
         )
 
         data_splitter = DataSplitter()
-        facility_csvs = data_splitter.split_csvs_by_facility(
-            sample_csvs, patient_facilities, encounter_facilities
+        facility_tables = data_splitter.split_tables_by_facility(
+            sample_tables, patient_facilities, encounter_facilities
         )
 
         # Each patient should appear in exactly 2 facilities
@@ -256,13 +256,13 @@ class TestAugmentationPipeline:
 
             # Check patient appears in both facilities
             for facility_id in facilities:
-                facility_patients = facility_csvs[facility_id]["patients.csv"]
+                facility_patients = facility_tables[facility_id]["patients"]
                 assert patient_uuid in facility_patients["Id"].values
 
-    def test_uuid_preservation_across_facilities(self, sample_csvs, config):
+    def test_uuid_preservation_across_facilities(self, sample_tables, config):
         """Test that patient UUIDs are identical across all facilities."""
-        patients_df = sample_csvs["patients.csv"]
-        encounters_df = sample_csvs["encounters.csv"]
+        patients_df = sample_tables["patients"]
+        encounters_df = sample_tables["encounters"]
 
         facility_assigner = FacilityAssigner(
             config.facility_distribution, random_seed=42
@@ -274,18 +274,18 @@ class TestAugmentationPipeline:
         )
 
         data_splitter = DataSplitter()
-        facility_csvs = data_splitter.split_csvs_by_facility(
-            sample_csvs, patient_facilities, encounter_facilities
+        facility_tables = data_splitter.split_tables_by_facility(
+            sample_tables, patient_facilities, encounter_facilities
         )
 
         # Apply errors
         error_injector = ErrorInjector(config.error_injection, random_seed=42)
 
-        for facility_id, csvs in facility_csvs.items():
+        for facility_id, tables in facility_tables.items():
             errored_patients_df, _ = error_injector.inject_errors_into_patients(
-                csvs["patients.csv"], facility_id
+                tables["patients"], facility_id
             )
-            facility_csvs[facility_id]["patients.csv"] = errored_patients_df
+            facility_tables[facility_id]["patients"] = errored_patients_df
 
         # For each patient at multiple facilities, verify UUID is identical
         for patient_uuid, facilities in patient_facilities.items():
@@ -295,7 +295,7 @@ class TestAugmentationPipeline:
             # Get patient record from each facility
             facility_records = []
             for facility_id in facilities:
-                facility_patients = facility_csvs[facility_id]["patients.csv"]
+                facility_patients = facility_tables[facility_id]["patients"]
                 patient_record = facility_patients[
                     facility_patients["Id"] == patient_uuid
                 ]

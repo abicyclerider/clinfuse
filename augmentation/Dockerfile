@@ -9,4 +9,4 @@ COPY . augmentation/
 
 ENV PYTHONUNBUFFERED=1
 
-ENTRYPOINT ["python", "-m", "augmentation.cli.augment"]
+ENTRYPOINT ["python"]

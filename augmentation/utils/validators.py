@@ -14,14 +14,14 @@ class DataValidator:
         """Initialize validator."""
         self.data_handler = DataHandler()
 
-    def validate_facility_csvs(
-        self, facility_csvs: Dict[str, pd.DataFrame]
+    def validate_facility_tables(
+        self, facility_tables: Dict[str, pd.DataFrame]
     ) -> Tuple[bool, List[str]]:
         """
-        Validate a facility's CSV files for referential integrity.
+        Validate a facility's tables for referential integrity.
 
         Args:
-            facility_csvs: Dictionary of CSV DataFrames for a facility
+            facility_tables: Dictionary of DataFrames for a facility
 
         Returns:
             Tuple of (is_valid, list of error messages)
@@ -29,73 +29,73 @@ class DataValidator:
         errors = []
 
         # Validate patient references
-        errors.extend(self._validate_patient_references(facility_csvs))
+        errors.extend(self._validate_patient_references(facility_tables))
 
         # Validate encounter references
-        errors.extend(self._validate_encounter_references(facility_csvs))
+        errors.extend(self._validate_encounter_references(facility_tables))
 
         # Validate claims references
-        errors.extend(self._validate_claims_references(facility_csvs))
+        errors.extend(self._validate_claims_references(facility_tables))
 
         # Validate non-empty critical tables
-        errors.extend(self._validate_non_empty_tables(facility_csvs))
+        errors.extend(self._validate_non_empty_tables(facility_tables))
 
         return len(errors) == 0, errors
 
     def _validate_patient_references(
-        self, facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_tables: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate all PATIENT foreign keys resolve."""
         errors = []
 
-        if "patients.csv" not in facility_csvs:
-            return ["Missing patients.csv"]
+        if "patients" not in facility_tables:
+            return ["Missing patients table"]
 
-        patient_ids = set(facility_csvs["patients.csv"]["Id"].values)
+        patient_ids = set(facility_tables["patients"]["Id"].values)
 
         # Check encounters
         if (
-            "encounters.csv" in facility_csvs
-            and len(facility_csvs["encounters.csv"]) > 0
+            "encounters" in facility_tables
+            and len(facility_tables["encounters"]) > 0
         ):
-            encounter_patients = set(facility_csvs["encounters.csv"]["PATIENT"].values)
+            encounter_patients = set(facility_tables["encounters"]["PATIENT"].values)
             invalid = encounter_patients - patient_ids
             if invalid:
                 errors.append(
-                    f"encounters.csv has {len(invalid)} invalid PATIENT references"
+                    f"encounters has {len(invalid)} invalid PATIENT references"
                 )
 
         # Check payer_transitions
         if (
-            "payer_transitions.csv" in facility_csvs
-            and len(facility_csvs["payer_transitions.csv"]) > 0
+            "payer_transitions" in facility_tables
+            and len(facility_tables["payer_transitions"]) > 0
         ):
             transition_patients = set(
-                facility_csvs["payer_transitions.csv"]["PATIENT"].values
+                facility_tables["payer_transitions"]["PATIENT"].values
             )
             invalid = transition_patients - patient_ids
             if invalid:
                 errors.append(
-                    f"payer_transitions.csv has {len(invalid)} invalid PATIENT references"
+                    f"payer_transitions has {len(invalid)} invalid PATIENT references"
                 )
 
         return errors
 
     def _validate_encounter_references(
-        self, facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_tables: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate all ENCOUNTER foreign keys resolve."""
         errors = []
 
-        if "encounters.csv" not in facility_csvs:
-            return ["Missing encounters.csv"]
+        if "encounters" not in facility_tables:
+            return ["Missing encounters table"]
 
-        encounter_ids = set(facility_csvs["encounters.csv"]["Id"].values)
+        encounter_ids = set(facility_tables["encounters"]["Id"].values)
 
         # Check encounter-linked tables
         for table_name in self.data_handler.ENCOUNTER_LINKED_TABLES:
-            if table_name in facility_csvs and len(facility_csvs[table_name]) > 0:
-                df = facility_csvs[table_name]
+            if table_name in facility_tables and len(facility_tables[table_name]) > 0:
+                df = facility_tables[table_name]
                 if "ENCOUNTER" in df.columns:
                     table_encounters = set(df["ENCOUNTER"].values)
                     invalid = table_encounters - encounter_ids
@@ -105,57 +105,57 @@ class DataValidator:
                         )
 
         # Check claims (uses APPOINTMENTID)
-        if "claims.csv" in facility_csvs and len(facility_csvs["claims.csv"]) > 0:
-            claims_encounters = set(facility_csvs["claims.csv"]["APPOINTMENTID"].values)
+        if "claims" in facility_tables and len(facility_tables["claims"]) > 0:
+            claims_encounters = set(facility_tables["claims"]["APPOINTMENTID"].values)
             invalid = claims_encounters - encounter_ids
             if invalid:
                 errors.append(
-                    f"claims.csv has {len(invalid)} invalid APPOINTMENTID references"
+                    f"claims has {len(invalid)} invalid APPOINTMENTID references"
                 )
 
         return errors
 
     def _validate_claims_references(
-        self, facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_tables: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate claims_transactions references to claims."""
         errors = []
 
-        if "claims_transactions.csv" not in facility_csvs:
+        if "claims_transactions" not in facility_tables:
             return []
 
-        if len(facility_csvs["claims_transactions.csv"]) == 0:
+        if len(facility_tables["claims_transactions"]) == 0:
             return []
 
-        if "claims.csv" not in facility_csvs:
-            errors.append("claims_transactions.csv present but claims.csv missing")
+        if "claims" not in facility_tables:
+            errors.append("claims_transactions present but claims missing")
             return errors
 
-        claim_ids = set(facility_csvs["claims.csv"]["Id"].values)
+        claim_ids = set(facility_tables["claims"]["Id"].values)
         transaction_claims = set(
-            facility_csvs["claims_transactions.csv"]["CLAIMID"].values
+            facility_tables["claims_transactions"]["CLAIMID"].values
         )
 
         invalid = transaction_claims - claim_ids
         if invalid:
             errors.append(
-                f"claims_transactions.csv has {len(invalid)} invalid CLAIMID references"
+                f"claims_transactions has {len(invalid)} invalid CLAIMID references"
             )
 
         return errors
 
     def _validate_non_empty_tables(
-        self, facility_csvs: Dict[str, pd.DataFrame]
+        self, facility_tables: Dict[str, pd.DataFrame]
     ) -> List[str]:
         """Validate that critical tables are not empty."""
         errors = []
 
-        critical_tables = ["patients.csv", "encounters.csv"]
+        critical_tables = ["patients", "encounters"]
 
         for table_name in critical_tables:
-            if table_name not in facility_csvs:
+            if table_name not in facility_tables:
                 errors.append(f"Missing critical table: {table_name}")
-            elif len(facility_csvs[table_name]) == 0:
+            elif len(facility_tables[table_name]) == 0:
                 errors.append(f"Critical table is empty: {table_name}")
 
         return errors

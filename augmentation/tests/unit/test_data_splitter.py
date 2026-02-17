@@ -76,71 +76,71 @@ def minimal_data():
         "e5": 2,
         "e6": 2,
     }
-    synthea_csvs = {
-        "patients.csv": patients,
-        "encounters.csv": encounters,
-        "conditions.csv": conditions,
-        "medications.csv": medications,
-        "organizations.csv": organizations,
-        "claims.csv": claims,
+    synthea_tables = {
+        "patients": patients,
+        "encounters": encounters,
+        "conditions": conditions,
+        "medications": medications,
+        "organizations": organizations,
+        "claims": claims,
     }
-    return synthea_csvs, patient_facilities, encounter_facilities
+    return synthea_tables, patient_facilities, encounter_facilities
 
 
 @pytest.mark.unit
 class TestDataSplitter:
     def test_patients_filtered_to_facility(self, splitter, minimal_data):
         """Only patients with encounters at facility appear in that facility's data."""
-        csvs, pat_fac, enc_fac = minimal_data
-        result = splitter.split_csvs_by_facility(csvs, pat_fac, enc_fac)
+        tables, pat_fac, enc_fac = minimal_data
+        result = splitter.split_tables_by_facility(tables, pat_fac, enc_fac)
 
         # Facility 1: p1 (both facilities) and p2 (fac 1 only)
-        fac1_patients = set(result[1]["patients.csv"]["Id"])
+        fac1_patients = set(result[1]["patients"]["Id"])
         assert fac1_patients == {"p1", "p2"}
 
         # Facility 2: p1 (both facilities) and p3 (fac 2 only)
-        fac2_patients = set(result[2]["patients.csv"]["Id"])
+        fac2_patients = set(result[2]["patients"]["Id"])
         assert fac2_patients == {"p1", "p3"}
 
     def test_encounters_filtered_to_facility(self, splitter, minimal_data):
         """Only encounters assigned to a facility appear there."""
-        csvs, pat_fac, enc_fac = minimal_data
-        result = splitter.split_csvs_by_facility(csvs, pat_fac, enc_fac)
+        tables, pat_fac, enc_fac = minimal_data
+        result = splitter.split_tables_by_facility(tables, pat_fac, enc_fac)
 
-        fac1_encounters = set(result[1]["encounters.csv"]["Id"])
+        fac1_encounters = set(result[1]["encounters"]["Id"])
         assert fac1_encounters == {"e1", "e3", "e4"}
 
-        fac2_encounters = set(result[2]["encounters.csv"]["Id"])
+        fac2_encounters = set(result[2]["encounters"]["Id"])
         assert fac2_encounters == {"e2", "e5", "e6"}
 
     def test_encounter_linked_tables_follow_encounters(self, splitter, minimal_data):
         """Conditions/medications follow their encounter's facility assignment."""
-        csvs, pat_fac, enc_fac = minimal_data
-        result = splitter.split_csvs_by_facility(csvs, pat_fac, enc_fac)
+        tables, pat_fac, enc_fac = minimal_data
+        result = splitter.split_tables_by_facility(tables, pat_fac, enc_fac)
 
         # Conditions: e1 at fac1, e5 at fac2, e3 at fac1
-        fac1_conditions = set(result[1]["conditions.csv"]["ENCOUNTER"])
+        fac1_conditions = set(result[1]["conditions"]["ENCOUNTER"])
         assert fac1_conditions == {"e1", "e3"}
 
-        fac2_conditions = set(result[2]["conditions.csv"]["ENCOUNTER"])
+        fac2_conditions = set(result[2]["conditions"]["ENCOUNTER"])
         assert fac2_conditions == {"e5"}
 
     def test_reference_tables_copied_to_all(self, splitter, minimal_data):
         """Reference tables (organizations, providers, payers) appear in every facility."""
-        csvs, pat_fac, enc_fac = minimal_data
-        result = splitter.split_csvs_by_facility(csvs, pat_fac, enc_fac)
+        tables, pat_fac, enc_fac = minimal_data
+        result = splitter.split_tables_by_facility(tables, pat_fac, enc_fac)
 
         for fac_id in [1, 2]:
-            assert len(result[fac_id]["organizations.csv"]) == 2
+            assert len(result[fac_id]["organizations"]) == 2
 
     def test_claims_follow_encounters(self, splitter, minimal_data):
         """Claims are linked via APPOINTMENTID (encounter)."""
-        csvs, pat_fac, enc_fac = minimal_data
-        result = splitter.split_csvs_by_facility(csvs, pat_fac, enc_fac)
+        tables, pat_fac, enc_fac = minimal_data
+        result = splitter.split_tables_by_facility(tables, pat_fac, enc_fac)
 
         # Claim c1 -> e1 (fac1), c2 -> e3 (fac1), c3 -> e5 (fac2)
-        fac1_claims = set(result[1]["claims.csv"]["APPOINTMENTID"])
+        fac1_claims = set(result[1]["claims"]["APPOINTMENTID"])
         assert fac1_claims == {"e1", "e3"}
 
-        fac2_claims = set(result[2]["claims.csv"]["APPOINTMENTID"])
+        fac2_claims = set(result[2]["claims"]["APPOINTMENTID"])
         assert fac2_claims == {"e5"}
