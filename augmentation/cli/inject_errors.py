@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import click
+import pandas as pd
 import yaml
 from rich.console import Console
 from rich.progress import (
@@ -24,11 +25,98 @@ from rich.progress import (
 
 from ..config import AugmentationConfig
 from ..core import ErrorInjector, GroundTruthTracker
-from ..utils import DataHandler, DataValidator
+from ..utils import DataHandler
 
 console = Console()
 
 _IS_MACOS = platform.system() == "Darwin"
+
+# Tables that reference encounters via ENCOUNTER column
+_ENCOUNTER_LINKED = [
+    "conditions",
+    "medications",
+    "observations",
+    "procedures",
+    "immunizations",
+    "allergies",
+    "careplans",
+    "imaging_studies",
+    "devices",
+    "supplies",
+]
+
+
+def _read_column(fac_dir: Path, table: str, col: str) -> set:
+    """Read a single column from a facility parquet file as a set."""
+    p = fac_dir / f"{table}.parquet"
+    if not p.exists():
+        return set()
+    df = pd.read_parquet(p, columns=[col])
+    return set(df[col].values)
+
+
+def _validate_facility_lightweight(fac_dir: Path) -> list[str]:
+    """Validate referential integrity loading only the columns needed."""
+    errors: list[str] = []
+
+    # patients.Id
+    patients_path = fac_dir / "patients.parquet"
+    if not patients_path.exists():
+        return ["Missing patients table"]
+    patient_ids = set(pd.read_parquet(patients_path, columns=["Id"])["Id"].values)
+    if not patient_ids:
+        errors.append("Critical table is empty: patients")
+
+    # encounters.Id + encounters.PATIENT
+    encounters_path = fac_dir / "encounters.parquet"
+    if not encounters_path.exists():
+        errors.append("Missing critical table: encounters")
+        return errors
+    enc_df = pd.read_parquet(encounters_path, columns=["Id", "PATIENT"])
+    encounter_ids = set(enc_df["Id"].values)
+    if not encounter_ids:
+        errors.append("Critical table is empty: encounters")
+    invalid = set(enc_df["PATIENT"].values) - patient_ids
+    if invalid:
+        errors.append(f"encounters has {len(invalid)} invalid PATIENT references")
+    del enc_df
+
+    # payer_transitions.PATIENT
+    invalid = _read_column(fac_dir, "payer_transitions", "PATIENT") - patient_ids
+    if invalid:
+        errors.append(
+            f"payer_transitions has {len(invalid)} invalid PATIENT references"
+        )
+
+    # encounter-linked tables
+    for table in _ENCOUNTER_LINKED:
+        p = fac_dir / f"{table}.parquet"
+        if not p.exists():
+            continue
+        df = pd.read_parquet(p, columns=["ENCOUNTER"])
+        invalid = set(df["ENCOUNTER"].values) - encounter_ids
+        if invalid:
+            errors.append(f"{table} has {len(invalid)} invalid ENCOUNTER references")
+        del df
+
+    # claims.APPOINTMENTID
+    claims_path = fac_dir / "claims.parquet"
+    if claims_path.exists():
+        claims_df = pd.read_parquet(claims_path, columns=["Id", "APPOINTMENTID"])
+        claim_ids = set(claims_df["Id"].values)
+        invalid = set(claims_df["APPOINTMENTID"].values) - encounter_ids
+        if invalid:
+            errors.append(f"claims has {len(invalid)} invalid APPOINTMENTID references")
+        del claims_df
+
+        # claims_transactions.CLAIMID
+        invalid = _read_column(fac_dir, "claims_transactions", "CLAIMID") - claim_ids
+        if invalid:
+            errors.append(
+                f"claims_transactions has {len(invalid)} invalid CLAIMID references"
+            )
+
+    return errors
 
 
 def _log_memory(label: str) -> None:
@@ -203,18 +291,14 @@ def main(
         validation_errors = []
         if validate:
             task_v = progress.add_task("[cyan]Validating...", total=num_facilities)
-            validator = DataValidator()
 
             for facility_id in facility_ids:
-                facility_data = data_handler.read_all_facility_tables(
-                    output_facilities_dir, facility_id
-                )
-                is_valid, errors = validator.validate_facility_tables(facility_data)
-                if not is_valid:
+                fac_dir = output_facilities_dir / f"facility_{facility_id:03d}"
+                fac_errors = _validate_facility_lightweight(fac_dir)
+                if fac_errors:
                     validation_errors.extend(
-                        [f"Facility {facility_id}: {err}" for err in errors]
+                        [f"Facility {facility_id}: {err}" for err in fac_errors]
                     )
-                del facility_data
                 progress.update(task_v, advance=1)
 
             if validation_errors:
