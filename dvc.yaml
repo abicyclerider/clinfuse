@@ -19,19 +19,10 @@ stages:
   # it actually uses. This avoids re-running csv_to_parquet when only
   # inject_errors.py changes.
 
-  build_entity_resolution:
-    cmd: >-
-      mkdir -p .build &&
-      docker build -f entity_resolution/Dockerfile -t entity_resolution -t entity_resolution:$(git rev-parse --short HEAD) . &&
-      docker image inspect entity_resolution --format '{{.Id}}' > .build/entity_resolution.iid
-    deps:
-    - entity_resolution/Dockerfile
-    - entity_resolution/requirements-runtime.txt
-    - entity_resolution/core/
-    - shared/
-    outs:
-    - .build/entity_resolution.iid:
-        cache: false
+  # NOTE: build_entity_resolution removed — each entity resolution stage now
+  # builds its own Docker image inline (cached, ~1s) and depends only on the
+  # source files it actually uses. This avoids re-running golden_records when
+  # only resolve.py changes (and vice versa).
 
   build_prepare_dataset:
     cmd: >-
@@ -139,6 +130,7 @@ stages:
   resolve:
     cmd: >-
       rm -rf output/resolved &&
+      docker build -f entity_resolution/Dockerfile -t entity_resolution . &&
       docker run --rm
       -v $(pwd)/output/augmented:/data/augmented:ro
       -v $(pwd)/output/resolved:/data/resolved
@@ -152,9 +144,15 @@ stages:
     - resolve.auto_reject_probability
     deps:
     - output/augmented
-    - .build/entity_resolution.iid
+    - entity_resolution/Dockerfile
+    - entity_resolution/requirements-runtime.txt
     - entity_resolution/resolve.py
+    - entity_resolution/core/
     - entity_resolution/config/matching_config.yaml
+    - shared/data_loader.py
+    - shared/ground_truth.py
+    - shared/medical_records.py
+    - shared/summarize.py
     outs:
     - output/resolved:
         cache: false
@@ -181,6 +179,7 @@ stages:
   golden_records:
     cmd: >-
       rm -rf output/golden_records &&
+      docker build -f entity_resolution/Dockerfile -t entity_resolution . &&
       docker run --rm
       -v $(pwd)/output/augmented:/data/augmented:ro
       -v $(pwd)/output/resolved:/data/resolved:ro
@@ -199,10 +198,13 @@ stages:
     - output/resolved/features.parquet
     - output/inferred/predictions.parquet
     - output/augmented
-    - .build/entity_resolution.iid
+    - entity_resolution/Dockerfile
+    - entity_resolution/requirements-runtime.txt
     - entity_resolution/build_golden_records.py
     - entity_resolution/core/
-    - shared/
+    - shared/data_loader.py
+    - shared/ground_truth.py
+    - shared/evaluation.py
     outs:
     - output/golden_records:
         cache: false
@@ -344,8 +346,11 @@ stages:
     - llm_classifier/launch_pod.sh
     - llm_classifier/Dockerfile
     - llm_classifier/requirements.txt
+    - llm_classifier/promote_model.py
     outs:
     - output/training/train/train_metrics.json:
+        cache: false
+    - output/training/train/promotion_decision.json:
         cache: false
 
   export:
@@ -357,6 +362,7 @@ stages:
       output/training/export
     deps:
     - output/training/train/train_metrics.json
+    - output/training/train/promotion_decision.json
     - llm_classifier/export_model.py
     - llm_classifier/export_remote.sh
     - llm_classifier/_remote_helpers.sh

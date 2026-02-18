@@ -138,6 +138,21 @@ if [[ -f "$RUN_DB" ]]; then
     fi
 fi
 
+# --- Promotion gate ---
+echo ""
+echo "=== Model promotion gate ==="
+python3 "$SCRIPT_DIR/promote_model.py" \
+    "$HISTORY_DB" \
+    "$OUTPUT_DIR/train_metrics.json" \
+    "$OUTPUT_DIR/promotion_decision.json"
+
+PROMOTED=$(python3 -c "import json; print(json.load(open('$OUTPUT_DIR/promotion_decision.json'))['promoted'])")
+if [[ "$PROMOTED" == "True" || "$PROMOTED" == "true" ]]; then
+    echo "  Model PROMOTED — export stage will push to production."
+else
+    echo "  Model NOT promoted — export stage will be skipped."
+fi
+
 echo ""
 echo "Done. Training metrics saved to $OUTPUT_DIR/train_metrics.json"
 echo "View all runs: mlflow ui --backend-store-uri sqlite:///$HISTORY_DB"

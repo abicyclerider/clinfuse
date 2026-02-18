@@ -35,6 +35,19 @@ echo "Export remote run"
 echo "  GPU type:   $GPU_TYPE"
 echo "  Output dir: $OUTPUT_DIR"
 
+# --- Check promotion decision ---
+TRAIN_DIR="$(dirname "$OUTPUT_DIR")/train"
+PROMOTION_FILE="$TRAIN_DIR/promotion_decision.json"
+if [[ -f "$PROMOTION_FILE" ]]; then
+    PROMOTED=$(python3 -c "import json; print(json.load(open('$PROMOTION_FILE')).get('promoted', True))")
+    if [[ "$PROMOTED" == "False" || "$PROMOTED" == "false" ]]; then
+        echo "=== Model not promoted — skipping export ==="
+        mkdir -p "$OUTPUT_DIR"
+        echo '{"skipped": true, "reason": "model_not_promoted"}' > "$OUTPUT_DIR/export_info.json"
+        exit 0
+    fi
+fi
+
 # --- Setup ---
 check_python_deps huggingface_hub
 read_credentials
