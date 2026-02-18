@@ -31,10 +31,7 @@ from shared.ground_truth import (
     generate_true_pairs_from_ground_truth,
     load_ground_truth,
 )
-from shared.medical_records import (
-    get_patient_records,
-    load_medical_records,
-)
+from shared.medical_records import load_medical_records
 from shared.summarize import (
     INSTRUCTION,
     summarize_diff_friendly_from_records,
@@ -82,6 +79,24 @@ def generate_gray_zone_texts(
         "index"
     )
 
+    # Pre-index medical records by (PATIENT, facility_id) for O(1) lookups
+    # instead of O(n) mask filtering per call
+    indexed_records = {}
+    for record_type, df in medical_records.items():
+        indexed_records[record_type] = {
+            key: group for key, group in df.groupby(["PATIENT", "facility_id"])
+        }
+    del medical_records
+    logger.info("Indexed medical records for fast lookup")
+
+    def get_patient_records_indexed(patient_id, facility_id):
+        result = {}
+        for record_type, idx in indexed_records.items():
+            group = idx.get((patient_id, facility_id))
+            if group is not None and not group.empty:
+                result[record_type] = group
+        return result
+
     rows = []
     total = len(gray_zone_df)
     for i, (_, feat_row) in enumerate(gray_zone_df.iterrows(), 1):
@@ -94,8 +109,8 @@ def generate_gray_zone_texts(
             logger.warning(f"Skipping pair ({rid1}, {rid2}): record not found")
             continue
 
-        recs1 = get_patient_records(info1["id"], info1["facility_id"], medical_records)
-        recs2 = get_patient_records(info2["id"], info2["facility_id"], medical_records)
+        recs1 = get_patient_records_indexed(info1["id"], info1["facility_id"])
+        recs2 = get_patient_records_indexed(info2["id"], info2["facility_id"])
 
         summary_a = summarize_diff_friendly_from_records(recs1)
         summary_b = summarize_diff_friendly_from_records(recs2)
