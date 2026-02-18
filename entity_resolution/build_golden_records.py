@@ -97,12 +97,11 @@ def main(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # Discover run directory
-    run_dirs = sorted(Path(augmented_dir).glob("run_*"))
-    if not run_dirs:
-        raise FileNotFoundError(f"No run_* directory found in {augmented_dir}")
-    run_dir = run_dirs[-1]
-    logger.info(f"Using run directory: {run_dir}")
+    # Resolve augmented data directory
+    run_dir = Path(augmented_dir)
+    if not (run_dir / "facilities").is_dir():
+        raise FileNotFoundError(f"No facilities/ directory found in {augmented_dir}")
+    logger.info(f"Using augmented data: {run_dir}")
 
     # Load patient data
     patients_df = load_facility_patients(str(run_dir))

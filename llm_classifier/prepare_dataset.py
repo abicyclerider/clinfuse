@@ -82,14 +82,12 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    # Resolve augmented directory and auto-detect latest run_* subdir
+    # Resolve augmented directory (contains facilities/, metadata/, statistics/)
     _project_root = Path(__file__).resolve().parent.parent
     augmented_dir = args.augmented_dir or str(_project_root / "output" / "augmented")
-    run_dirs = sorted(Path(augmented_dir).glob("run_*"))
-    if not run_dirs:
-        raise FileNotFoundError(f"No run_* directories found in {augmented_dir}")
-    RUN_DIR = str(run_dirs[-1])
-    run_dir_name = run_dirs[-1].name
+    if not (Path(augmented_dir) / "facilities").is_dir():
+        raise FileNotFoundError(f"No facilities/ directory found in {augmented_dir}")
+    RUN_DIR = str(augmented_dir)
     print(f"Using augmented data: {RUN_DIR}")
 
     # HF login
@@ -316,7 +314,7 @@ def main():
                 "eval": len(eval_data),
                 "test": len(test_data),
             },
-            "run_dir": run_dir_name,
+            "augmented_dir": str(augmented_dir),
             "seed": args.seed,
         }
         info_path = os.path.join(args.output_dir, "dataset_info.json")

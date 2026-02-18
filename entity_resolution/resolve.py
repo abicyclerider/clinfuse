@@ -53,15 +53,11 @@ logger = logging.getLogger(__name__)
 
 
 def discover_run_dir(augmented_dir: str) -> Path:
-    """Find the single run_* directory inside augmented_dir."""
-    candidates = sorted(Path(augmented_dir).glob("run_*"))
-    if not candidates:
-        raise FileNotFoundError(f"No run_* directory found in {augmented_dir}")
-    if len(candidates) > 1:
-        logger.warning(
-            f"Multiple run directories found, using latest: {candidates[-1]}"
-        )
-    return candidates[-1]
+    """Resolve the augmented data directory containing facilities/."""
+    p = Path(augmented_dir)
+    if not (p / "facilities").is_dir():
+        raise FileNotFoundError(f"No facilities/ directory found in {augmented_dir}")
+    return p
 
 
 def generate_gray_zone_texts(
