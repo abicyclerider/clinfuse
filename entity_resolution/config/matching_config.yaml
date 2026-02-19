@@ -4,15 +4,15 @@
 # Splink v4 probabilistic linkage settings
 splink:
   predict_threshold: 0.01       # Minimum match probability to keep as candidate
-  auto_match_probability: 0.95  # P >= 0.95 → definite match
-  auto_reject_probability: 0.05 # P < 0.05 → definite non-match
+  auto_match_probability: 0.99  # P >= 0.99 → definite match
+  auto_reject_probability: 0.01 # P < 0.01 → definite non-match
 
 # Gray zone: logit-space combination of Splink probability + LLM confidence
 gray_zone:
   w_splink: 1.0     # weight on Splink log-odds
   w_llm: 1.0        # weight on LLM log-odds
   threshold: 0.0     # combined logit threshold (0.0 = 50/50 odds)
-  min_splink_probability: 0.3  # floor: reject LLM match if Splink P < this
+  min_splink_probability: 0.0  # floor: disabled (no veto)
   # Bayesian prior correction: shifts LLM logit to account for training vs
   # production base rate mismatch.  correction = logit(gz_prior) - logit(train_prior)
   llm_training_prior: 0.5    # base rate in LLM training data (balanced 50/50)

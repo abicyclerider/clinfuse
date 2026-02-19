@@ -1,5 +1,5 @@
 generate:
-  population: 10000
+  population: 1001
   seed: 67890
 
 augment:
@@ -11,8 +11,8 @@ augment:
   error_weights: '{"name_variation":0.30,"address_error":0.20,"date_variation":0.15,"ssn_error":0.05,"formatting_error":0.00,"missing_data":0.30}'
 
 resolve:
-  auto_match_probability: 0.95
-  auto_reject_probability: 0.05
+  auto_match_probability: 0.99
+  auto_reject_probability: 0.01
 
 generate_training:
   population: 30000

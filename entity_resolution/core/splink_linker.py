@@ -11,7 +11,7 @@ import math
 
 import pandas as pd
 import splink.comparison_library as cl
-from splink import DuckDBAPI, Linker, SettingsCreator, block_on
+from splink import ColumnExpression, DuckDBAPI, Linker, SettingsCreator, block_on
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,10 @@ def build_settings(config: dict) -> SettingsCreator:
         cl.DateOfBirthComparison("birthdate", input_is_string=True),
     ]
 
+    # Substring expressions for fuzzy blocking (catches typos in names)
+    last_name_3 = ColumnExpression("substr(last_name, 1, 3)")
+    first_name_3 = ColumnExpression("substr(first_name, 1, 3)")
+
     blocking_rules = [
         block_on("last_name", "city"),
         block_on("zip", "birth_year"),
@@ -54,6 +58,17 @@ def build_settings(config: dict) -> SettingsCreator:
         block_on("birthdate"),
         block_on("first_name", "zip"),
         block_on("address"),
+        # Fuzzy blocking: catch pairs where name typos break exact-match rules
+        block_on(last_name_3, "birth_year", "zip"),
+        block_on(first_name_3, "last_name"),
+        # Broad single-field rules to catch heavily-errored records
+        block_on("last_name"),
+        block_on("birth_year"),
+        block_on("first_name"),
+        block_on(first_name_3, "birth_year"),
+        block_on(last_name_3, "birth_year"),
+        block_on("zip"),
+        block_on("city"),
     ]
 
     splink_cfg = config.get("splink", {})
