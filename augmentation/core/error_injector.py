@@ -88,8 +88,10 @@ class ErrorInjector:
     def _prepare_error_type_distribution(self) -> None:
         """Prepare arrays for weighted random sampling of error types."""
         weights = self.config.error_type_weights
-        self.error_types = list(weights.keys())
-        self.error_type_probabilities = list(weights.values())
+        self.error_types = [k for k, v in weights.items() if v > 0]
+        probs = [weights[k] for k in self.error_types]
+        total = sum(probs)
+        self.error_type_probabilities = [p / total for p in probs]
 
     def inject_errors_into_patients(
         self,
@@ -119,8 +121,10 @@ class ErrorInjector:
 
         # Vectorized: decide number of errors for patients that get them
         multi_rolls = self.rng.random(n)
-        # Pre-generate integers for multi-error patients (2-3 errors)
-        multi_counts = self.rng.integers(2, 4, size=n)
+        # Pre-generate integers for multi-error patients
+        multi_counts = self.rng.integers(
+            self.config.min_errors, self.config.max_errors + 1, size=n
+        )
 
         indices = errored_df.index
         id_values = errored_df["Id"].values

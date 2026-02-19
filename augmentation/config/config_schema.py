@@ -84,6 +84,12 @@ class ErrorInjectionConfig(BaseModel):
         description="Probability of multiple errors given at least one error",
     )
 
+    min_errors: int = Field(
+        default=3, ge=1, description="Min errors when multiple errors apply"
+    )
+
+    max_errors: int = Field(default=5, ge=1, description="Max errors per record")
+
     error_type_weights: Dict[str, float] = Field(
         default={
             "name_variation": 0.25,
@@ -104,6 +110,20 @@ class ErrorInjectionConfig(BaseModel):
         if not (0.99 <= total <= 1.01):
             raise ValueError(f"Error type weights must sum to 1.0, got {total}")
         return v
+
+    @model_validator(mode="after")
+    def validate_error_bounds(self):
+        """Ensure min_errors <= max_errors and max_errors <= non-zero weight types."""
+        if self.min_errors > self.max_errors:
+            raise ValueError(
+                f"min_errors ({self.min_errors}) > max_errors ({self.max_errors})"
+            )
+        n_nonzero = sum(1 for w in self.error_type_weights.values() if w > 0)
+        if self.max_errors > n_nonzero:
+            raise ValueError(
+                f"max_errors ({self.max_errors}) > non-zero weight types ({n_nonzero})"
+            )
+        return self
 
 
 class PathConfig(BaseModel):

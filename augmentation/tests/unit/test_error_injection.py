@@ -114,6 +114,8 @@ class TestErrorInjector:
         config = ErrorInjectionConfig(
             global_error_rate=1.0,
             multiple_errors_probability=0.0,
+            min_errors=1,
+            max_errors=2,
             error_type_weights={
                 "name_variation": 0.50,
                 "address_error": 0.50,
@@ -170,6 +172,46 @@ class TestErrorInjector:
 
         # Total should match log length
         assert stats["total_errors"] == len(error_log)
+
+    def test_error_count_respects_config_bounds(self):
+        """Test that error counts stay within configured min/max bounds."""
+        config = ErrorInjectionConfig(
+            global_error_rate=1.0,
+            multiple_errors_probability=1.0,
+            min_errors=4,
+            max_errors=5,
+        )
+        injector = ErrorInjector(config, random_seed=42)
+        patients_df = create_sample_patients(50)
+        _, error_log = injector.inject_errors_into_patients(patients_df, facility_id=1)
+
+        errors_by_patient: dict[str, int] = {}
+        for record in error_log:
+            pid = record["patient_uuid"]
+            errors_by_patient[pid] = errors_by_patient.get(pid, 0) + 1
+
+        for pid, count in errors_by_patient.items():
+            assert count <= 5
+
+    def test_min_errors_gt_max_errors_raises(self):
+        """Test that min_errors > max_errors raises validation error."""
+        with pytest.raises(Exception):
+            ErrorInjectionConfig(min_errors=5, max_errors=3)
+
+    def test_max_errors_gt_nonzero_types_raises(self):
+        """Test that max_errors > non-zero weight types raises validation error."""
+        with pytest.raises(Exception):
+            ErrorInjectionConfig(
+                max_errors=6,
+                error_type_weights={
+                    "name_variation": 0.50,
+                    "address_error": 0.50,
+                    "date_variation": 0.0,
+                    "ssn_error": 0.0,
+                    "formatting_error": 0.0,
+                    "missing_data": 0.0,
+                },
+            )
 
     def test_different_facilities_get_different_errors(self):
         """Test that same patient gets different errors at different facilities."""

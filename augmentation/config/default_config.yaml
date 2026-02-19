@@ -34,14 +34,18 @@ error_injection:
   # 70% chance of multiple errors (given at least one error)
   multiple_errors_probability: 0.7
 
+  # Error count bounds for multi-error records
+  min_errors: 3
+  max_errors: 5
+
   # Relative weights for error types
-  # These will be refined based on research findings
+  # formatting_error set to 0 because Splink normalizes case/whitespace
   error_type_weights:
-    name_variation: 0.25      # Nicknames, typos, maiden names
-    address_error: 0.15       # Abbreviations, apartment format, full change
-    date_variation: 0.10      # Off-by-one, digit transposition
-    ssn_error: 0.10           # Digit transposition, format
-    formatting_error: 0.10    # Capitalization, whitespace (mostly neutralized)
+    name_variation: 0.30      # Nicknames, typos, maiden names
+    address_error: 0.20       # Abbreviations, apartment format, full change
+    date_variation: 0.15      # Off-by-one, digit transposition
+    ssn_error: 0.05           # Digit transposition, format
+    formatting_error: 0.00    # Capitalization, whitespace (neutralized by Splink)
     missing_data: 0.30        # Field set to empty/null
 
 # Paths (will be set via CLI or programmatically)

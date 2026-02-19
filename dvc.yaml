@@ -117,8 +117,14 @@ stages:
       -m augmentation.cli.inject_errors
       --input /data/input --output /data/output
       --error-seed ${augment.error_seed}
+      --min-errors ${augment.min_errors}
+      --max-errors ${augment.max_errors}
+      --error-weights '${augment.error_weights}'
     params:
     - augment.error_seed
+    - augment.min_errors
+    - augment.max_errors
+    - augment.error_weights
     deps:
     - output/segmented
     - augmentation/Dockerfile
@@ -290,8 +296,14 @@ stages:
       -m augmentation.cli.inject_errors
       --input /data/input --output /data/output
       --error-seed ${augment_training.error_seed}
+      --min-errors ${augment_training.min_errors}
+      --max-errors ${augment_training.max_errors}
+      --error-weights '${augment_training.error_weights}'
     params:
     - augment_training.error_seed
+    - augment_training.min_errors
+    - augment_training.max_errors
+    - augment_training.error_weights
     deps:
     - output/training/segmented
     - augmentation/Dockerfile

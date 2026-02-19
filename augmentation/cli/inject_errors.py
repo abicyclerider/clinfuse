@@ -5,6 +5,7 @@ and writes errored patients + copies all other tables unchanged. This is the
 fast step that only needs to rerun when error configuration changes.
 """
 
+import json
 import platform
 import resource
 import shutil
@@ -158,12 +159,33 @@ def _log_memory(label: str) -> None:
     default=True,
     help="Run validation after error injection",
 )
+@click.option(
+    "--min-errors",
+    type=int,
+    default=None,
+    help="Min errors when multiple errors apply",
+)
+@click.option(
+    "--max-errors",
+    type=int,
+    default=None,
+    help="Max errors per record",
+)
+@click.option(
+    "--error-weights",
+    type=str,
+    default=None,
+    help="JSON error_type_weights override",
+)
 def main(
     input_dir: Path,
     output_dir: Path,
     error_seed: int,
     config_file: Path,
     validate: bool,
+    min_errors: int | None,
+    max_errors: int | None,
+    error_weights: str | None,
 ):
     """Inject demographic errors into segmented facility data."""
     t0 = time.monotonic()
@@ -184,6 +206,13 @@ def main(
         "output_dir": str(output_dir),
     }
     config_dict["random_seed"] = error_seed
+    ei = config_dict.setdefault("error_injection", {})
+    if min_errors is not None:
+        ei["min_errors"] = min_errors
+    if max_errors is not None:
+        ei["max_errors"] = max_errors
+    if error_weights is not None:
+        ei["error_type_weights"] = json.loads(error_weights)
     config = AugmentationConfig(**config_dict)
 
     input_facilities_dir = input_dir / "facilities"
