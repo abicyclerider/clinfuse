@@ -170,10 +170,22 @@ def main(
 
     # Splink probability + LLM logit combination
     gz_cfg = cfg.get("gray_zone", {})
-    w_splink = gz_cfg.get("w_splink", 0.5)
+    w_splink = gz_cfg.get("w_splink", 1.0)
     w_llm = gz_cfg.get("w_llm", 1.0)
     gz_threshold = gz_cfg.get("threshold", 0.0)
     min_splink_prob = gz_cfg.get("min_splink_probability", 0.0)
+
+    # Bayesian prior correction: LLM was trained on balanced data (50/50) but
+    # the gray zone has a much lower true-match rate (~2.5%).  Shift the LLM
+    # logit by the difference in log-prior-odds so its output reflects the
+    # production base rate.
+    llm_train_prior = gz_cfg.get("llm_training_prior", 0.5)
+    gz_prior = gz_cfg.get("gray_zone_prior", 0.5)  # 0.5 = no correction
+    prior_correction = math.log(gz_prior / (1.0 - gz_prior)) - math.log(
+        llm_train_prior / (1.0 - llm_train_prior)
+    )
+    logger.info(f"LLM prior correction: {prior_correction:.3f} logits "
+                f"(train={llm_train_prior}, gz={gz_prior})")
 
     llm_pairs = set()
     llm_confidences = {}
@@ -196,15 +208,18 @@ def main(
         else:
             llm_logit = 2.0 if prediction == 1 else -2.0
 
+        # Apply Bayesian prior correction to LLM logit
+        llm_logit_corrected = llm_logit + prior_correction
+
         # Get Splink match probability from features
         feat_row = feat_lookup.get(pair)
         if feat_row is not None and "match_probability" in feat_row.index:
             splink_prob = float(feat_row["match_probability"])
             s_logit = splink_logit(splink_prob)
-            combined_logit = w_splink * s_logit + w_llm * llm_logit
+            combined_logit = w_splink * s_logit + w_llm * llm_logit_corrected
         else:
             splink_prob = None
-            combined_logit = w_llm * llm_logit
+            combined_logit = w_llm * llm_logit_corrected
 
         # Reject if Splink probability is below floor (demographics say no match)
         if (

@@ -9,10 +9,14 @@ splink:
 
 # Gray zone: logit-space combination of Splink probability + LLM confidence
 gray_zone:
-  w_splink: 0.5     # weight on Splink log-odds
+  w_splink: 1.0     # weight on Splink log-odds
   w_llm: 1.0        # weight on LLM log-odds
   threshold: 0.0     # combined logit threshold (0.0 = 50/50 odds)
   min_splink_probability: 0.3  # floor: reject LLM match if Splink P < this
+  # Bayesian prior correction: shifts LLM logit to account for training vs
+  # production base rate mismatch.  correction = logit(gz_prior) - logit(train_prior)
+  llm_training_prior: 0.5    # base rate in LLM training data (balanced 50/50)
+  gray_zone_prior: 0.025     # estimated true-match rate in the gray zone
 
 # Golden record creation
 golden_record:
