@@ -33,6 +33,18 @@ from transformers import (
 )
 
 MODEL_ID = "abicyclerider/medgemma-4b-text-only-base"
+
+
+def _flash_attn_available() -> bool:
+    """Check if Flash Attention 2 is installed and usable."""
+    try:
+        import flash_attn  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 DATASET_REPO = "abicyclerider/entity-resolution-pairs"
 ADAPTER_REPO = "abicyclerider/medgemma-4b-entity-resolution-classifier"
 CHECKPOINT_REPO = "abicyclerider/medgemma-4b-er-classifier-checkpoints"
@@ -73,6 +85,11 @@ def main():
     )
     parser.add_argument(
         "--no-push", action="store_true", help="Skip pushing adapter to Hub"
+    )
+    parser.add_argument(
+        "--torch-compile",
+        action="store_true",
+        help="Enable torch.compile (inductor backend)",
     )
     args = parser.parse_args()
 
@@ -144,11 +161,20 @@ def main():
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.bfloat16,
     )
+
+    load_kwargs = {}
+    if _flash_attn_available():
+        print("Flash Attention 2 enabled.")
+        load_kwargs["attn_implementation"] = "flash_attention_2"
+    else:
+        print("Flash Attention 2 not installed — using default attention.")
+
     model = AutoModelForSequenceClassification.from_pretrained(
         MODEL_ID,
         num_labels=2,
         quantization_config=bnb_config,
         device_map="auto",
+        **load_kwargs,
     )
     # Ensure pad_token_id is set on model config
     model.config.pad_token_id = tokenizer.pad_token_id
@@ -184,6 +210,12 @@ def main():
     mlflow.set_tracking_uri(f"sqlite:///{mlflow_db}")
     mlflow.set_experiment("entity-resolution-classifier")
 
+    ta_kwargs = {}
+    if args.torch_compile:
+        print("torch.compile enabled (inductor backend).")
+        ta_kwargs["torch_compile"] = True
+        ta_kwargs["torch_compile_backend"] = "inductor"
+
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=args.epochs,
@@ -191,6 +223,7 @@ def main():
         per_device_eval_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         gradient_checkpointing=args.gradient_checkpointing,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         learning_rate=args.lr,
         weight_decay=0.01,
         warmup_steps=args.warmup_steps,
@@ -203,14 +236,16 @@ def main():
         greater_is_better=True,
         bf16=True,
         fp16=False,
-        dataloader_num_workers=2,
+        dataloader_num_workers=4,
         dataloader_pin_memory=True,
+        group_by_length=True,
         seed=42,
         report_to="mlflow",
         push_to_hub=not args.no_push,
         hub_model_id=CHECKPOINT_REPO,
         hub_strategy="every_save",
         hub_private_repo=True,
+        **ta_kwargs,
     )
 
     trainer = Trainer(
