@@ -87,6 +87,12 @@ def main():
         help="Build dataset locally without pushing to Hub",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=5000,
+        help="Patients per chunk when loading medical records (controls peak memory)",
+    )
     args = parser.parse_args()
 
     # Resolve augmented directory (contains facilities/, metadata/, statistics/)
@@ -148,46 +154,68 @@ def main():
     print(f"\nTrue match pairs: {len(true_pairs)}")
     print(f"Non-match pairs:  {len(non_match_pairs)}")
 
-    # Load medical records and build summaries
-    print("\nLoading medical records...")
-    medical_records = load_medical_records(
-        RUN_DIR, record_types=SUMMARIZER_RECORD_TYPES, columns=SUMMARIZER_COLUMNS
-    )
-
-    # Pre-index medical records by (PATIENT, facility_id) for O(1) lookups
-    print("Indexing medical records...")
-    indexed_records = {}
-    for record_type, df in medical_records.items():
-        indexed_records[record_type] = {
-            key: group for key, group in df.groupby(["PATIENT", "facility_id"])
-        }
-    # Free the unindexed copies
-    del medical_records
-
-    def get_patient_records_indexed(patient_id, facility_id):
-        result = {}
-        for record_type, idx in indexed_records.items():
-            group = idx.get((patient_id, facility_id))
-            if group is not None and not group.empty:
-                result[record_type] = group
-        return result
-
+    # Identify needed records and patient UUIDs before loading medical data
     all_needed = set()
     for r1, r2 in true_pairs | non_match_pairs:
         all_needed.add(r1)
         all_needed.add(r2)
 
-    print(f"Generating summaries for {len(all_needed)} unique records...")
-    summary_cache = {}
-    done = 0
+    needed_patient_ids = sorted(
+        {record_map[rid][0] for rid in all_needed if rid in record_map}
+    )
+    n_chunks = (len(needed_patient_ids) + args.chunk_size - 1) // args.chunk_size
+    print(
+        f"\nNeed summaries for {len(all_needed)} records "
+        f"({len(needed_patient_ids)} unique patients, "
+        f"{n_chunks} chunks of up to {args.chunk_size})"
+    )
+
+    # Build reverse index: patient_uuid -> list of record_ids needing summaries
+    pid_to_rids: dict[str, list[tuple[str, str]]] = {}
     for rid in all_needed:
         if rid in record_map:
             pid, fid = record_map[rid]
-            records = get_patient_records_indexed(pid, fid)
-            summary_cache[rid] = summarize_diff_friendly_from_records(records)
-            done += 1
-            if done % 5000 == 0:
-                print(f"  {done}/{len(all_needed)} summaries generated...")
+            pid_to_rids.setdefault(pid, []).append((rid, fid))
+
+    # Generate summaries in chunks to bound memory usage
+    summary_cache = {}
+    for chunk_idx in range(n_chunks):
+        chunk_start = chunk_idx * args.chunk_size
+        chunk_pids = set(
+            needed_patient_ids[chunk_start : chunk_start + args.chunk_size]
+        )
+
+        medical_records = load_medical_records(
+            RUN_DIR,
+            record_types=SUMMARIZER_RECORD_TYPES,
+            columns=SUMMARIZER_COLUMNS,
+            patient_ids=chunk_pids,
+        )
+
+        # Index for O(1) lookups within this chunk
+        indexed_records: dict[str, dict] = {}
+        for record_type, df in medical_records.items():
+            indexed_records[record_type] = {
+                key: group
+                for key, group in df.groupby(["PATIENT", "facility_id"])
+            }
+        del medical_records
+
+        # Generate summaries for records belonging to this chunk's patients
+        for pid in chunk_pids:
+            for rid, fid in pid_to_rids.get(pid, []):
+                records = {}
+                for record_type, idx in indexed_records.items():
+                    group = idx.get((pid, fid))
+                    if group is not None and not group.empty:
+                        records[record_type] = group
+                summary_cache[rid] = summarize_diff_friendly_from_records(records)
+
+        del indexed_records
+        print(
+            f"  Chunk {chunk_idx + 1}/{n_chunks}: "
+            f"{len(summary_cache)}/{len(all_needed)} summaries generated"
+        )
 
     # Token length stats
     token_lengths = [len(tokenizer.encode(s)) for s in summary_cache.values()]

@@ -317,6 +317,7 @@ stages:
       --augmented-dir /data/augmented
       --output-dir /data/dataset
       --seed ${prepare_dataset.seed}
+      --chunk-size 2000
     params:
     - prepare_dataset.seed
     deps:
