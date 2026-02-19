@@ -35,6 +35,7 @@ from transformers import (
 MODEL_ID = "abicyclerider/medgemma-4b-text-only-base"
 DATASET_REPO = "abicyclerider/entity-resolution-pairs"
 ADAPTER_REPO = "abicyclerider/medgemma-4b-entity-resolution-classifier"
+CHECKPOINT_REPO = "abicyclerider/medgemma-4b-er-classifier-checkpoints"
 
 
 def compute_metrics(eval_pred):
@@ -206,6 +207,10 @@ def main():
         dataloader_pin_memory=True,
         seed=42,
         report_to="mlflow",
+        push_to_hub=not args.no_push,
+        hub_model_id=CHECKPOINT_REPO,
+        hub_strategy="every_save",
+        hub_private_repo=True,
     )
 
     trainer = Trainer(
