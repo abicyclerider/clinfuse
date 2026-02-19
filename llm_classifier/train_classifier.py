@@ -91,6 +91,12 @@ def main():
         action="store_true",
         help="Enable torch.compile (inductor backend)",
     )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=0,
+        help="Stop after N optimizer steps (0=use epochs instead)",
+    )
     args = parser.parse_args()
 
     # Device detection — QLoRA requires CUDA
@@ -215,6 +221,14 @@ def main():
         print("torch.compile enabled (inductor backend).")
         ta_kwargs["torch_compile"] = True
         ta_kwargs["torch_compile_backend"] = "inductor"
+    if args.max_steps > 0:
+        ta_kwargs["max_steps"] = args.max_steps
+        # With max_steps, switch eval/save to step-based (every ~1/3 of training)
+        eval_save_steps = max(args.max_steps // 3, 1)
+        ta_kwargs["eval_strategy"] = "steps"
+        ta_kwargs["eval_steps"] = eval_save_steps
+        ta_kwargs["save_strategy"] = "steps"
+        ta_kwargs["save_steps"] = eval_save_steps
 
     training_args = TrainingArguments(
         output_dir=output_dir,

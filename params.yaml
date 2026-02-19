@@ -36,3 +36,4 @@ train:
   max_length: 2048
   lora_r: 16
   max_samples: 0
+  max_steps: 5000

@@ -352,6 +352,7 @@ stages:
       --max-length ${train.max_length}
       --lora-r ${train.lora_r}
       --max-samples ${train.max_samples}
+      --max-steps ${train.max_steps}
     params:
     - train.epochs
     - train.batch_size
@@ -359,6 +360,7 @@ stages:
     - train.max_length
     - train.lora_r
     - train.max_samples
+    - train.max_steps
     deps:
     - output/training/dataset/dataset_info.json
     - llm_classifier/train_classifier.py
