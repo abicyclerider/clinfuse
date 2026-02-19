@@ -60,8 +60,8 @@ stages:
       size: 290
     - path: entity_resolution/config/matching_config.yaml
       hash: md5
-      md5: da799d6ae2d5078d8b3e8ae7e6c46baf
-      size: 1267
+      md5: 8b7aa3bd4dbddbf649b369edb6c32593
+      size: 1264
     - path: entity_resolution/core/
       hash: md5
       md5: f99a34d4be5e39101d68e7f801f96bd9.dir
@@ -77,8 +77,8 @@ stages:
       size: 10838
     - path: output/augmented
       hash: md5
-      md5: e9bd16d0d640b671c463af92b9979985.dir
-      size: 138063421
+      md5: f108925e50b5857dbd57c2c872a57b6a.dir
+      size: 138874022
       nfiles: 96
     - path: shared/data_loader.py
       hash: md5
@@ -103,8 +103,8 @@ stages:
     outs:
     - path: output/resolved
       hash: md5
-      md5: 0a19410d669bae17a23c06bad2af5c94.dir
-      size: 3951770
+      md5: 4b415392c9bbb8cfc07080819ca66f30.dir
+      size: 3696847
       nfiles: 4
   golden_records:
     cmd: rm -rf output/golden_records && docker build -f 
@@ -138,21 +138,21 @@ stages:
       size: 83
     - path: output/augmented
       hash: md5
-      md5: e9bd16d0d640b671c463af92b9979985.dir
-      size: 138063421
+      md5: f108925e50b5857dbd57c2c872a57b6a.dir
+      size: 138874022
       nfiles: 96
     - path: output/inferred/predictions.parquet
       hash: md5
-      md5: e43a550e6846f93fe3fb6159ad457a5e
-      size: 86689
+      md5: 4ac600f0999470a963132e7298c2241c
+      size: 89387
     - path: output/resolved/auto_matches.parquet
       hash: md5
-      md5: a4af59595ae7930aec053b172161da75
-      size: 94130
+      md5: c40d2dcb8eaec79bbf333caff4fc6457
+      size: 77022
     - path: output/resolved/features.parquet
       hash: md5
-      md5: f93afb0d00e67d475e2424cbc4e8c09f
-      size: 457396
+      md5: 763e6b98f0bd6f5380a63f15618451eb
+      size: 415276
     - path: shared/data_loader.py
       hash: md5
       md5: f53ed9b385eac459c4c29af6dd43b146
@@ -168,8 +168,8 @@ stages:
     outs:
     - path: output/golden_records
       hash: md5
-      md5: e9471fced4f747e729d7146b7a1fef94.dir
-      size: 230771
+      md5: 51d8ab518195cf01d468140ea16e23d7.dir
+      size: 225026
       nfiles: 3
   infer:
     cmd: mkdir -p output/inferred && llm_classifier/infer_remote.sh --gpu-type 
@@ -205,13 +205,13 @@ stages:
       size: 186
     - path: output/resolved/gray_zone_pairs.parquet
       hash: md5
-      md5: 3fb97b3e4fca170ac2319a39ee1e572b
-      size: 3399797
+      md5: 668db45b4242fa9934f560cd9d20010e
+      size: 3204102
     outs:
     - path: output/inferred/predictions.parquet
       hash: md5
-      md5: e43a550e6846f93fe3fb6159ad457a5e
-      size: 86689
+      md5: 4ac600f0999470a963132e7298c2241c
+      size: 89387
   train_scorer:
     cmd: rm -rf output/scorer && docker run --rm -v 
       $(pwd)/output/augmented:/data/augmented:ro -v 
@@ -766,8 +766,8 @@ stages:
       $(pwd)/output/segmented:/data/input:ro -v 
       $(pwd)/output/augmented:/data/output augmentation -m 
       augmentation.cli.inject_errors --input /data/input --output /data/output 
-      --error-seed 99 --min-errors 3 --max-errors 5 --error-weights 
-      '{"name_variation":0.30,"address_error":0.20,"date_variation":0.15,"ssn_error":0.05,"formatting_error":0.00,"missing_data":0.30}'
+      --error-seed 99 --min-errors 5 --max-errors 8 --error-weights 
+      '{"name_variation":0.35,"address_error":0.05,"date_variation":0.15,"ssn_error":0.15,"formatting_error":0.00,"missing_data":0.30}'
     deps:
     - path: augmentation/Dockerfile
       hash: md5
@@ -783,8 +783,8 @@ stages:
       size: 1743
     - path: augmentation/core/
       hash: md5
-      md5: 66c73d7ac6be1e2d650de6f1c4191dd2.dir
-      size: 103260
+      md5: 90419cf8ec7f7292fb058c4d69dd68d7.dir
+      size: 103187
       nfiles: 15
     - path: augmentation/requirements-runtime.txt
       hash: md5
@@ -798,12 +798,12 @@ stages:
     params:
       params.yaml:
         augment.error_seed: 99
-        augment.error_weights: '{"name_variation":0.30,"address_error":0.20,"date_variation":0.15,"ssn_error":0.05,"formatting_error":0.00,"missing_data":0.30}'
-        augment.max_errors: 5
-        augment.min_errors: 3
+        augment.error_weights: '{"name_variation":0.35,"address_error":0.05,"date_variation":0.15,"ssn_error":0.15,"formatting_error":0.00,"missing_data":0.30}'
+        augment.max_errors: 8
+        augment.min_errors: 5
     outs:
     - path: output/augmented
       hash: md5
-      md5: e9bd16d0d640b671c463af92b9979985.dir
-      size: 138063421
+      md5: f108925e50b5857dbd57c2c872a57b6a.dir
+      size: 138874022
       nfiles: 96

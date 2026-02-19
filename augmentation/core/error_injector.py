@@ -138,11 +138,11 @@ class ErrorInjector:
             if multi_rolls[pos] < self.config.multiple_errors_probability:
                 num_errors = int(multi_counts[pos])
 
-            # Select error types
+            # Select error types (replace=True allows repeated types)
             selected_error_types = self.rng.choice(
                 self.error_types,
-                size=min(num_errors, len(self.error_types)),
-                replace=False,
+                size=num_errors,
+                replace=True,
                 p=self.error_type_probabilities,
             )
 

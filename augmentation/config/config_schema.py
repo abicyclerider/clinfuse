@@ -113,15 +113,10 @@ class ErrorInjectionConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_error_bounds(self):
-        """Ensure min_errors <= max_errors and max_errors <= non-zero weight types."""
+        """Ensure min_errors <= max_errors."""
         if self.min_errors > self.max_errors:
             raise ValueError(
                 f"min_errors ({self.min_errors}) > max_errors ({self.max_errors})"
-            )
-        n_nonzero = sum(1 for w in self.error_type_weights.values() if w > 0)
-        if self.max_errors > n_nonzero:
-            raise ValueError(
-                f"max_errors ({self.max_errors}) > non-zero weight types ({n_nonzero})"
             )
         return self
 

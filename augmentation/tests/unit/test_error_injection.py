@@ -198,20 +198,20 @@ class TestErrorInjector:
         with pytest.raises(Exception):
             ErrorInjectionConfig(min_errors=5, max_errors=3)
 
-    def test_max_errors_gt_nonzero_types_raises(self):
-        """Test that max_errors > non-zero weight types raises validation error."""
-        with pytest.raises(Exception):
-            ErrorInjectionConfig(
-                max_errors=6,
-                error_type_weights={
-                    "name_variation": 0.50,
-                    "address_error": 0.50,
-                    "date_variation": 0.0,
-                    "ssn_error": 0.0,
-                    "formatting_error": 0.0,
-                    "missing_data": 0.0,
-                },
-            )
+    def test_max_errors_gt_nonzero_types_allowed(self):
+        """Test that max_errors > non-zero weight types is allowed (repeated types)."""
+        config = ErrorInjectionConfig(
+            max_errors=6,
+            error_type_weights={
+                "name_variation": 0.50,
+                "address_error": 0.50,
+                "date_variation": 0.0,
+                "ssn_error": 0.0,
+                "formatting_error": 0.0,
+                "missing_data": 0.0,
+            },
+        )
+        assert config.max_errors == 6
 
     def test_different_facilities_get_different_errors(self):
         """Test that same patient gets different errors at different facilities."""
