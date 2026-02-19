@@ -91,10 +91,10 @@ stages:
       -m augmentation.cli.segment
       --input /data/input --output /data/output
       --assignment-seed ${augment.assignment_seed}
-      --confusable-pairs ${augment.confusable_pairs}
+      --confusable-pct ${augment.confusable_pct}
     params:
     - augment.assignment_seed
-    - augment.confusable_pairs
+    - augment.confusable_pct
     deps:
     - synthea_runner/output/synthea_parquet
     - augmentation/Dockerfile
@@ -270,10 +270,10 @@ stages:
       -m augmentation.cli.segment
       --input /data/input --output /data/output
       --assignment-seed ${augment_training.assignment_seed}
-      --confusable-pairs ${augment_training.confusable_pairs}
+      --confusable-pct ${augment_training.confusable_pct}
     params:
     - augment_training.assignment_seed
-    - augment_training.confusable_pairs
+    - augment_training.confusable_pct
     deps:
     - output/training/synthea_parquet
     - augmentation/Dockerfile

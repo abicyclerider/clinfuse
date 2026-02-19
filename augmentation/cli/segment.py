@@ -62,11 +62,11 @@ def _log_memory(label: str) -> None:
     help="Random seed for facility assignment",
 )
 @click.option(
-    "--confusable-pairs",
-    "confusable_pairs",
-    type=int,
-    default=0,
-    help="Number of confusable patient pairs to create (0=disabled)",
+    "--confusable-pct",
+    "confusable_pct",
+    type=float,
+    default=0.0,
+    help="Percentage of population to create as confusable pairs (0=disabled)",
 )
 @click.option(
     "--config",
@@ -79,7 +79,7 @@ def main(
     input_dir: Path,
     output_dir: Path,
     assignment_seed: int,
-    confusable_pairs: int,
+    confusable_pct: float,
     config_file: Path,
 ):
     """Segment Synthea data into per-facility Parquet files."""
@@ -171,7 +171,10 @@ def main(
         console.print("[green]✓[/green] Assigned patients across facilities")
 
         # ── Generate confusable patient pairs ──
-        n_confusable = confusable_pairs or config.confusable_groups.total_pairs
+        if confusable_pct > 0:
+            n_confusable = round(confusable_pct / 100 * len(patients_df))
+        else:
+            n_confusable = config.confusable_groups.total_pairs
         if n_confusable > 0:
             task_c = progress.add_task(
                 "[cyan]Generating confusable pairs...", total=None
