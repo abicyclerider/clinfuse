@@ -164,7 +164,9 @@ def generate_gray_zone_texts(
     if writer:
         writer.close()
         logger.info(f"Wrote {written} gray zone pairs to {output_path}")
-        return pd.DataFrame(columns=["record_id_1", "record_id_2", "total_score", "text"])
+        return pd.DataFrame(
+            columns=["record_id_1", "record_id_2", "total_score", "text"]
+        )
 
     return pd.DataFrame(rows)
 
