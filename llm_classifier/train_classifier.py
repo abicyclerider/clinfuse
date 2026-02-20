@@ -224,10 +224,13 @@ def main():
         ta_kwargs["max_steps"] = args.max_steps
         # With max_steps, switch eval/save to step-based (every ~1/3 of training)
         eval_save_steps = max(args.max_steps // 3, 1)
-        ta_kwargs["eval_strategy"] = "steps"
+        eval_strategy = "steps"
+        save_strategy = "steps"
         ta_kwargs["eval_steps"] = eval_save_steps
-        ta_kwargs["save_strategy"] = "steps"
         ta_kwargs["save_steps"] = eval_save_steps
+    else:
+        eval_strategy = "epoch"
+        save_strategy = "epoch"
 
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -242,8 +245,8 @@ def main():
         warmup_steps=args.warmup_steps,
         lr_scheduler_type="cosine",
         logging_steps=args.logging_steps,
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        eval_strategy=eval_strategy,
+        save_strategy=save_strategy,
         load_best_model_at_end=True,
         metric_for_best_model="f1",
         greater_is_better=True,
