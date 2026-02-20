@@ -13,7 +13,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="ghcr.io/abicyclerider/medgemma-pipeline:sha-$(git rev-parse HEAD)"
+# Read the verified image tag from DVC's build_gpu_image stage output.
+# This avoids race conditions where git HEAD points to a commit whose
+# GHCR image hasn't been pushed yet (e.g. dvc.yaml-only changes).
+IID_FILE="$(cd "$SCRIPT_DIR/.." && pwd)/.build/gpu-image.iid"
+if [[ -f "$IID_FILE" ]]; then
+    IMAGE="ghcr.io/abicyclerider/medgemma-pipeline:$(cat "$IID_FILE")"
+else
+    echo "ERROR: $IID_FILE not found. Run 'dvc repro build_gpu_image' first."
+    exit 1
+fi
 DEFAULT_GPU="NVIDIA GeForce RTX 4090"
 DEFAULT_DISK=30
 
