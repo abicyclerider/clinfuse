@@ -367,6 +367,7 @@ stages:
       --
       --epochs ${train.epochs}
       --batch-size ${train.batch_size}
+      --grad-accum ${train.grad_accum}
       --lr ${train.lr}
       --max-length ${train.max_length}
       --lora-r ${train.lora_r}
@@ -376,6 +377,7 @@ stages:
     params:
     - train.epochs
     - train.batch_size
+    - train.grad_accum
     - train.lr
     - train.max_length
     - train.lora_r
