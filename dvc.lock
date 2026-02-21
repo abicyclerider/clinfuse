@@ -4,7 +4,7 @@ stages:
     cmd: rm -rf synthea_runner/output/synthea_raw && docker run --rm -e 
       JAVA_OPTS=-Xmx8g -v 
       $(pwd)/synthea_runner/output/synthea_raw:/synthea/synthea/output synthea 
-      /bin/sh -c "./run_synthea -p 5000 -s 67890 
+      /bin/sh -c "./run_synthea -p 2500 -s 67890 
       --exporter.baseDirectory=./output --exporter.csv.export=true 
       --exporter.fhir.export=false Massachusetts"
     deps:
@@ -14,13 +14,13 @@ stages:
       size: 72
     params:
       params.yaml:
-        generate.population: 5000
+        generate.population: 2500
         generate.seed: 67890
     outs:
     - path: synthea_runner/output/synthea_raw/csv
       hash: md5
-      md5: 136ca70e0a3929cf6fd79afee8c9b208.dir
-      size: 4895067565
+      md5: 43ab2b2bea712bf7fb053a4f665c0601.dir
+      size: 2510588426
       nfiles: 18
   augment:
     cmd: rm -rf output/augmented && docker run --rm -v 
@@ -60,12 +60,12 @@ stages:
       size: 290
     - path: entity_resolution/config/matching_config.yaml
       hash: md5
-      md5: 8b7aa3bd4dbddbf649b369edb6c32593
-      size: 1264
+      md5: 36814b4802965c9f13f2bde9ce81cf88
+      size: 1340
     - path: entity_resolution/core/
       hash: md5
-      md5: 74590b5ebb775871639a5b76068dc03a.dir
-      size: 85284
+      md5: 4515bafa2b33a524bad9fa7006e4493b.dir
+      size: 85440
       nfiles: 12
     - path: entity_resolution/requirements-runtime.txt
       hash: md5
@@ -73,12 +73,12 @@ stages:
       size: 83
     - path: entity_resolution/resolve.py
       hash: md5
-      md5: 69d119333698abbcce68b8062fd81659
-      size: 10838
+      md5: c7bb6aa959644f49cc9b6271533680e4
+      size: 12045
     - path: output/augmented
       hash: md5
-      md5: 37cc2c19af913183560e4ddf5392c6b7.dir
-      size: 139516018
+      md5: 35a71b8eb1903e9e9c6d027805ef9d6d.dir
+      size: 351482246
       nfiles: 96
     - path: shared/data_loader.py
       hash: md5
@@ -103,8 +103,8 @@ stages:
     outs:
     - path: output/resolved
       hash: md5
-      md5: 520d78f7cd6e2c30b52130a6753bf8f2.dir
-      size: 3236731
+      md5: 1079529fba805bafca3ea53f6f1bb7cf.dir
+      size: 150868585
       nfiles: 4
   golden_records:
     cmd: rm -rf output/golden_records && docker build -f 
@@ -327,7 +327,7 @@ stages:
     deps:
     - path: .build/prepare-dataset.iid
       hash: md5
-      md5: c5ba4cba01d015bbef344cb8572a5241
+      md5: 755574c96d58aba35606d2424dc75eba
       size: 72
     - path: llm_classifier/prepare_dataset.py
       hash: md5
@@ -344,7 +344,7 @@ stages:
     outs:
     - path: output/training/dataset/dataset_info.json
       hash: md5
-      md5: 78db3e56f86906b38b2f6d95c308b99b
+      md5: 1a176c1d5b9ce9e29e2ada4088874cd6
       size: 235
   train:
     cmd: rm -rf output/training/train && mkdir -p output/training/train && 
@@ -511,7 +511,7 @@ stages:
       size: 264
     - path: llm_classifier/requirements-prepare.txt
       hash: md5
-      md5: 70b89cb85a1deca8fa0f21758121638e
+      md5: ca5bd4f61707c9ec93057e6bf100ad62
       size: 150
     - path: shared/data_loader.py
       hash: md5
@@ -532,7 +532,7 @@ stages:
     outs:
     - path: .build/prepare-dataset.iid
       hash: md5
-      md5: c5ba4cba01d015bbef344cb8572a5241
+      md5: 755574c96d58aba35606d2424dc75eba
       size: 72
   build_entity_resolution:
     cmd: mkdir -p .build && docker build -f entity_resolution/Dockerfile -t 
@@ -712,14 +712,14 @@ stages:
       size: 207
     - path: synthea_runner/output/synthea_raw/csv
       hash: md5
-      md5: 136ca70e0a3929cf6fd79afee8c9b208.dir
-      size: 4895067565
+      md5: 43ab2b2bea712bf7fb053a4f665c0601.dir
+      size: 2510588426
       nfiles: 18
     outs:
     - path: synthea_runner/output/synthea_parquet
       hash: md5
-      md5: 00cf43d2b34ea7142ce88319213f7254.dir
-      size: 694297286
+      md5: ed9c24343d25a672e43867b80c3a4fbf.dir
+      size: 359922168
       nfiles: 18
   segment:
     cmd: rm -rf output/segmented && docker build -t augmentation augmentation/ 
@@ -751,8 +751,8 @@ stages:
       size: 207
     - path: synthea_runner/output/synthea_parquet
       hash: md5
-      md5: 00cf43d2b34ea7142ce88319213f7254.dir
-      size: 694297286
+      md5: ed9c24343d25a672e43867b80c3a4fbf.dir
+      size: 359922168
       nfiles: 18
     params:
       params.yaml:
@@ -761,8 +761,8 @@ stages:
     outs:
     - path: output/segmented
       hash: md5
-      md5: 6f12c65e83c2868b3399762f169d71e5.dir
-      size: 661876388
+      md5: 732d34e71738818e1d97eaa98790432c.dir
+      size: 343045403
       nfiles: 93
   inject_errors:
     cmd: rm -rf output/augmented && docker build -t augmentation augmentation/ 
@@ -796,8 +796,8 @@ stages:
       size: 207
     - path: output/segmented
       hash: md5
-      md5: 6f12c65e83c2868b3399762f169d71e5.dir
-      size: 661876388
+      md5: 732d34e71738818e1d97eaa98790432c.dir
+      size: 343045403
       nfiles: 93
     params:
       params.yaml:
@@ -808,8 +808,8 @@ stages:
     outs:
     - path: output/augmented
       hash: md5
-      md5: ffd257a458eb779c2f8dfdb0c355cb2f.dir
-      size: 678270881
+      md5: 35a71b8eb1903e9e9c6d027805ef9d6d.dir
+      size: 351482246
       nfiles: 96
   build_gpu_image:
     cmd: 'mkdir -p .build && docker buildx imagetools inspect ghcr.io/abicyclerider/medgemma-pipeline:sha-$(git
@@ -819,8 +819,8 @@ stages:
     deps:
     - path: llm_classifier/Dockerfile
       hash: md5
-      md5: cac9c87d2d5a2220d8e4860e335b3b96
-      size: 1512
+      md5: 06e7f0cf393a84e632a120881219e8d5
+      size: 1227
     - path: llm_classifier/_runpod.py
       hash: md5
       md5: 67ade95d7ac020f540803839d4026493
@@ -831,22 +831,22 @@ stages:
       size: 9825
     - path: llm_classifier/infer_classifier.py
       hash: md5
-      md5: 227e16d18001753c7016e1d53c2644e1
-      size: 15192
+      md5: 241908ad859435c0614eaab0f9732354
+      size: 14865
     - path: llm_classifier/prepare_base_model.py
       hash: md5
       md5: b3bb8ce10a051da5feca425682f4f96c
       size: 4837
     - path: llm_classifier/requirements.txt
       hash: md5
-      md5: 4155a096ecc262e6a5963d396269ab6d
+      md5: 837b7fcc4c0331c322203ffd0580b83c
       size: 186
     - path: llm_classifier/train_classifier.py
       hash: md5
-      md5: baba71d6880c61a1192c8dfa800560f8
-      size: 12805
+      md5: 7bdac9ccb7ae8abc9fadfd0d60bf7f4b
+      size: 13022
     outs:
     - path: .build/gpu-image.iid
       hash: md5
-      md5: 16363d8054df5db37f28e6fa97cd5cf6
+      md5: 873375a9cbc74eed80c4059ff9d07e64
       size: 45

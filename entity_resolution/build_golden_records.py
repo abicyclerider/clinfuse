@@ -17,7 +17,11 @@ import click
 import pandas as pd
 import yaml
 
-from entity_resolution.core.evaluation import evaluate_golden_records, evaluate_matches
+from entity_resolution.core.evaluation import (
+    evaluate_clusters,
+    evaluate_golden_records,
+    evaluate_matches,
+)
 from entity_resolution.core.golden_record import create_golden_records
 from entity_resolution.core.splink_linker import splink_logit
 from shared.data_loader import create_record_id, load_facility_patients
@@ -264,6 +268,7 @@ def main(
     # --- Step 6: Evaluate ---
     eval_metrics = evaluate_matches(matches, ground_truth_df, patients_df)
     golden_metrics = evaluate_golden_records(golden_records_df, ground_truth_df)
+    cluster_metrics = evaluate_clusters(golden_records_df, ground_truth_df)
 
     # --- Step 7: Save outputs ---
     golden_records_df.to_parquet(out / "golden_records.parquet", index=False)
@@ -294,7 +299,7 @@ def main(
     all_matches_df.to_parquet(out / "all_matches.parquet", index=False)
 
     # Combine metrics
-    combined_metrics = {**eval_metrics, **golden_metrics}
+    combined_metrics = {**eval_metrics, **golden_metrics, **cluster_metrics}
     combined_metrics["auto_match_count"] = len(auto_pairs)
     combined_metrics["llm_match_count"] = len(llm_pairs)
     combined_metrics["total_match_count"] = len(all_match_pairs)

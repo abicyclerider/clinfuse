@@ -238,6 +238,37 @@ stages:
     - output/golden_records:
         cache: false
 
+  evaluate_baselines:
+    cmd: >-
+      rm -rf output/baselines &&
+      docker build -f entity_resolution/Dockerfile -t entity_resolution . &&
+      docker run --rm
+      -v $(pwd)/output/augmented:/data/augmented:ro
+      -v $(pwd)/output/resolved:/data/resolved:ro
+      -v $(pwd)/output/golden_records:/data/golden_records:ro
+      -v $(pwd)/output/baselines:/data/baselines
+      entity_resolution
+      python -m entity_resolution.evaluate_baselines
+      --augmented-dir /data/augmented
+      --features /data/resolved/features.parquet
+      --clinfuse-metrics /data/golden_records/evaluation_metrics.json
+      --output-dir /data/baselines
+      --config entity_resolution/config/matching_config.yaml
+    deps:
+    - output/resolved/features.parquet
+    - output/golden_records/evaluation_metrics.json
+    - output/augmented
+    - entity_resolution/Dockerfile
+    - entity_resolution/requirements-runtime.txt
+    - entity_resolution/evaluate_baselines.py
+    - entity_resolution/core/
+    - shared/data_loader.py
+    - shared/ground_truth.py
+    - shared/evaluation.py
+    outs:
+    - output/baselines:
+        cache: false
+
   # ── Training pipeline ────────────────────────────────────────────────
   generate_training:
     cmd: >-
