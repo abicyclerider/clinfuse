@@ -68,25 +68,31 @@
 
 \section{Team}
 
-\textbf{Alexander Rider} --- Solo submission.
+\textbf{Alexander Rider} --- Solo submission.\\[2pt]
+{\small\textbf{Resources:}
+\href{https://github.com/abicyclerider/clinfuse}{Code}\footnote{\url{https://github.com/abicyclerider/clinfuse}}
+\enspace|\enspace \href{https://huggingface.co/abicyclerider/medgemma-4b-entity-resolution-text-only}{Model}\footnote{\url{https://huggingface.co/abicyclerider/medgemma-4b-entity-resolution-text-only}}
+\enspace|\enspace \href{https://huggingface.co/datasets/abicyclerider/entity-resolution-pairs}{Dataset}\footnote{\url{https://huggingface.co/datasets/abicyclerider/entity-resolution-pairs}}
+\enspace|\enspace Video: \textit{[URL TBD]}
+}
 
 % =====================================================================
 %  PROBLEM STATEMENT
 % =====================================================================
 \section{Problem Statement}
 
-A cardiac arrest patient's record was confused with another patient's---one who carried a do-not-resuscitate order. The care team withheld life-saving treatment~\cite{ecri2016}. When healthcare systems can't reliably match records to the right patient, people die. Patients with duplicate charts---the most common form of this identity failure---are five times more likely to die during hospitalization~\cite{western2026}. Across 7{,}613 wrong-patient events at 181 healthcare organizations, 9\% resulted in patient harm~\cite{ecri2016}. For the emergency department registrar matching an unconscious patient to their records, or the IT staff reconciling patient feeds from dozens of hospitals, these are not edge cases---they are daily realities.
+A cardiac arrest patient's record was confused with another patient's---one who carried a do-not-resuscitate order. The care team withheld life-saving treatment~\cite{ecri2016}. When healthcare systems can't reliably match records to the right patient, people die. Patients with duplicate charts, the most common form of this identity failure, are five times more likely to die during hospitalization~\cite{western2026}. Across 7{,}613 wrong-patient events at 181 healthcare organizations, 9\% resulted in patient harm~\cite{ecri2016}. For the emergency department registrar matching an unconscious patient to their records, or the IT staff reconciling patient feeds from dozens of hospitals, these are not edge cases: they are daily realities.
 
-Duplicate records aren't just dangerous---they're pervasive. An estimated 8--12\% of hospital records are duplicates~\cite{morris2016}, costing the U.S.\ healthcare system over \$6 billion annually~\cite{blackbook2018}. Match accuracy averages 80--90\% within institutions but falls to 50\% in cross-organizational exchange~\cite{onc2014}---meaning roughly half of cross-organizational duplicates go unresolved. The MATCH~IT Act (H.R.~2002, 2025) sets a 99.9\% matching target~\cite{matchit2025}, and TEFCA v2.1 makes cross-organizational matching critical national infrastructure~\cite{tefca2024}. Closing the gap between these mandates and current cross-organizational accuracy requires a fundamentally different approach.
+Duplicate records aren't just dangerous. They're pervasive. An estimated 8--12\% of hospital records are duplicates~\cite{morris2016}, costing the U.S.\ healthcare system over \$6 billion annually~\cite{blackbook2018}. Matching rates average 80--90\% within institutions but fall to 50\% in cross-organizational exchange~\cite{onc2014}, meaning roughly half of cross-organizational duplicates go unresolved. The MATCH~IT Act (H.R.~2002, 2025) sets a 99.9\% matching target~\cite{matchit2025}, and TEFCA v2.1 makes cross-organizational matching critical national infrastructure~\cite{tefca2024}. Closing the gap between these mandates and current cross-organizational accuracy requires a fundamentally different approach.
 
-The barrier isn't better algorithms---it's better information. Any method relying exclusively on demographic fields faces an accuracy ceiling imposed by field quality---over half of duplicate pairs contain misspelled names or mismatched identifiers~\cite{morris2016}. The missing signal is \emph{clinical context}: the full breadth of a patient's medical record---conditions, medications, allergies, observations, and procedures---provides a powerful signal for resolving patient identity, regardless of demographic discrepancies. Yet no production entity resolution system exploits this signal: probabilistic and rule-based matchers lack the medical knowledge to interpret clinical histories as identity evidence. Resolving this limitation at scale could recover a substantial share of the \$6~billion in annual duplication costs~\cite{blackbook2018} and reduce the fivefold mortality risk~\cite{western2026} that fragmented records impose.
+The barrier isn't better algorithms. It's better information. Any method relying exclusively on demographic fields faces an accuracy ceiling imposed by field quality: over half of duplicate pairs contain misspelled names or mismatched identifiers~\cite{morris2016}. The missing signal is \emph{clinical context}: the full breadth of a patient's medical record---conditions, medications, allergies, observations, and procedures---provides a powerful signal for resolving patient identity, regardless of demographic discrepancies. Current production systems do not leverage this signal: probabilistic and rule-based matchers lack the medical knowledge to interpret clinical histories as identity evidence. Resolving this limitation at scale could recover a substantial share of the \$6~billion in annual duplication costs~\cite{blackbook2018} and reduce the fivefold mortality risk~\cite{western2026} that fragmented records impose.
 
 % =====================================================================
 %  OVERALL SOLUTION
 % =====================================================================
 \section{Overall Solution}
 
-Interpreting this clinical context as identity evidence requires medical reasoning---exactly the capability MedGemma~\cite{medgemma} provides. To demonstrate its potential for patient entity resolution, we embed it in ClinFuse, a three-tier pipeline that augments fast probabilistic matching with MedGemma's clinical reasoning, invoked selectively for ambiguous cases. Figure~\ref{fig:architecture} illustrates the architecture.
+MedGemma~\cite{medgemma} provides exactly this capability: medical reasoning that can interpret clinical context as identity evidence. To demonstrate its potential for patient entity resolution, we embed it in ClinFuse, a three-tier pipeline that augments fast probabilistic matching with MedGemma's clinical reasoning, invoked selectively for ambiguous cases. Figure~\ref{fig:architecture} illustrates the architecture.
 
 \subsubsection{Tier~1: Blocking} All records enter Splink~v4~\cite{splink}, which first applies blocking rules on demographic fields to generate candidate pairs without exhaustive $O(n^2)$ comparisons.
 
@@ -97,15 +103,15 @@ Interpreting this clinical context as identity evidence requires medical reasoni
 \subsubsection{Golden Records} Matched pairs form a graph whose connected components yield patient clusters. Field-level conflict resolution applies majority voting with domain heuristics (e.g., preferring longer address forms), producing a deduplicated Master Patient Index (MPI).
 
 \noindent\textbf{MedGemma as Clinical Reasoner.}
-Prior LLM-based approaches address adjacent tasks---diagnosis-code
+Prior LLM-based approaches address adjacent tasks (diagnosis-code
 linkage~\cite{medlink2023}, clinical trial matching~\cite{prism2024},
-general-domain entity resolution~\cite{peeters2023,booster2024,coling2025}---but
+general-domain entity resolution~\cite{peeters2023,booster2024,coling2025}) but
 none performs patient identity resolution using clinical narratives.
-Existing methods either rely on cloud-hosted models incompatible
-with HIPAA requirements, or operate exclusively on demographic
+Existing methods either rely on cloud-hosted models that complicate
+HIPAA compliance, or operate exclusively on demographic
 fields~\cite{pubmedbert_hybrid2025} without leveraging clinical context.
 
-MedGemma is a medically adapted model that combines clinical reasoning with edge-deployable size. Its medical fine-tuning embeds clinical knowledge that entity resolution in this domain demands: recognizing that ``Essential Hypertension'' and ``Hypertension'' denote the same diagnosis, that concurrent Hydrochlorothiazide and Lisinopril form a standard antihypertensive regimen, or that stable A1c trajectories suggest a single diabetic patient---knowledge a general-purpose model must acquire entirely from task-specific training data. Without this prior, a general-purpose model requires far more training examples and generalizes poorly to unseen terminology and clinical patterns. Figure~\ref{fig:example} illustrates this reasoning on the evaluation set's hardest pair.
+MedGemma is a medically adapted model that combines clinical reasoning with edge-deployable size. Its medical fine-tuning embeds clinical knowledge that entity resolution in this domain demands: recognizing that ``Essential Hypertension'' and ``Hypertension'' denote the same diagnosis, that concurrent Hydrochlorothiazide and Lisinopril form a standard antihypertensive regimen, or that stable A1c trajectories suggest a single diabetic patient. A general-purpose model must acquire this knowledge entirely from task-specific training data. Without this prior, a general-purpose model requires far more training examples and generalizes poorly to unseen terminology and clinical patterns. Figure~\ref{fig:example} shows the clinical evidence available to the model on a challenging evaluation pair.
 
 % --- FIGURE 1: Architecture ---
 \begin{figure*}[t]
@@ -122,7 +128,7 @@ MedGemma is a medically adapted model that combines clinical reasoning with edge
 
 \subsection{Data Generation and Augmentation}
 
-Synthea~\cite{walonoski2018} generates realistic synthetic patients with clinically coherent histories spanning conditions, medications, allergies, observations, and procedures. An augmentation pipeline distributes each patient's records across multiple simulated facilities and injects demographic errors: name variations (nickname substitution, typos, maiden name usage), address errors (abbreviation, format variation), date perturbations, identifier errors (SSN transposition, digit substitution), and formatting noise---mirroring documented real-world error patterns~\cite{morris2016}. Separate datasets are generated for training (30{,}000 patients) and evaluation (2{,}500 patients, 6{,}264 records across 5 facilities).
+Synthea~\cite{walonoski2018} generates realistic synthetic patients with clinically coherent histories spanning conditions, medications, allergies, observations, and procedures. An augmentation pipeline distributes each patient's records across multiple simulated facilities and injects demographic errors: name variations (nickname substitution, typos, maiden name usage), address errors (abbreviation, format variation), date perturbations, identifier errors (SSN transposition, digit substitution), and formatting noise that mirrors documented real-world error patterns~\cite{morris2016}. Separate datasets are generated for training (30{,}000 patients) and evaluation (2{,}500 patients, 6{,}264 records across 5 facilities).
 
 \subsection{Adapting MedGemma for Entity Resolution}
 
@@ -133,7 +139,7 @@ MedGemma~4B is a multimodal model with both vision and text encoders. Since our 
 We apply LoRA~\cite{hu2021lora} (Low-Rank Adaptation) in bf16 precision targeting attention and MLP projection layers, and replace the generative language-model head with a two-class classification layer that outputs match/non-match logits directly---bypassing text generation entirely. Fine-tuned classification heads significantly outperform zero-shot prompting for binary tasks~\cite{finetune_vs_prompt} while being orders of magnitude faster at inference~\cite{cls_head_efficiency}. Training uses balanced match/non-match pairs generated from augmented Synthea records.
 \subsection{Results}
 
-Pair-level metrics understate real-world impact, so Table~\ref{tab:results} reports golden record quality---how many patients remain fragmented or unresolved---on 6{,}264 synthetic records (2{,}500 patients across 5 facilities) under deliberately adversarial conditions: each record carries 8 to 12 demographic errors and each patient's clinical history is split across a random number of facilities.
+Pair-level metrics understate real-world impact, so Table~\ref{tab:results} reports golden record quality (how many patients remain fragmented or unresolved) on 6{,}264 synthetic records (2{,}500 patients across 5 facilities) under deliberately adversarial conditions: each record carries 8 to 12 demographic errors and each patient's clinical history is split across a random number of facilities.
 
 \begin{table}[h]
 \centering\small
@@ -155,7 +161,7 @@ Pair F1              & 0.764   & \textbf{0.916} & --- \\
 Even at its optimal threshold, Splink leaves 421 patients with fragmented records---nearly one in six. MedGemma's clinical understanding---recognizing matching disease trajectories and overlapping medication regimens---reduces split patients by 73\% to 115 and cuts the fragmentation rate from 14.4\% to 3.9\%, recovering 2{,}702 matches that demographics alone could not resolve. Pair-level F1 improves from 0.764 to 0.916, but the cluster-level impact is larger: each recovered link can transitively merge an entire patient cluster, so one correct LLM decision can unify records that would otherwise remain scattered across the MPI.
 
 \noindent\textbf{Projected impact.}
-At an estimated 8--12\% duplication rate~\cite{morris2016} across roughly 36~million U.S.\ hospital discharges annually, approximately 3--4~million duplicate record pairs exist, implying a per-duplicate cost of {\raise.17ex\hbox{$\scriptstyle\sim$}}\$1{,}700 from the \$6~billion aggregate~\cite{blackbook2018}. ClinFuse's value concentrates in the cross-organizational gray zone, where matching accuracy is just 50\%~\cite{onc2014}. For a mid-size health information exchange processing 500{,}000 cross-organizational matches annually, roughly 250{,}000 pairs remain unresolved; if ClinFuse's 73\% fragmentation reduction generalizes, that yields {\raise.17ex\hbox{$\scriptstyle\sim$}}182{,}500 fewer split records---approximately \$310M in recoverable costs for a single network, plus elimination of the associated fivefold mortality risk~\cite{western2026}. These projections extrapolate from synthetic evaluation; real-world impact depends on data quality, clinical history completeness, and institutional matching volumes.
+At an estimated 8--12\% duplication rate~\cite{morris2016} across roughly 36~million U.S.\ hospital discharges annually, approximately 3--4~million duplicate record pairs exist, implying a per-duplicate cost of {\raise.17ex\hbox{$\scriptstyle\sim$}}\$1{,}700 from the \$6~billion aggregate~\cite{blackbook2018}. ClinFuse's value concentrates in the cross-organizational gray zone, where matching accuracy is just 50\%~\cite{onc2014}. For a mid-size health information exchange processing 500{,}000 cross-organizational matches annually, roughly 250{,}000 pairs remain unresolved; if ClinFuse's 73\% fragmentation reduction generalizes, that yields {\raise.17ex\hbox{$\scriptstyle\sim$}}182{,}500 fewer split records, representing approximately \$310M in recoverable costs for a single network, plus elimination of the associated fivefold mortality risk~\cite{western2026}. These projections extrapolate from synthetic evaluation; real-world impact depends on data quality, clinical history completeness, and institutional matching volumes.
 
 % --- FIGURE 2: Clinical Summary Example ---
 \begin{figure}[t]
@@ -188,19 +194,19 @@ At an estimated 8--12\% duplication rate~\cite{morris2016} across roughly 36~mil
 \texttt{- A1c: 6.3\% (2025-01), 6.2\% (2026-01)} \\
 \bottomrule
 \end{tabular}
-\caption{The hardest pair in the evaluation set: completely different names give Splink a match probability of just 0.0006. MedGemma identifies identical medications, matching biometrics, and overlapping care patterns to correctly classify this as a match with 99.99\% confidence.}
+\caption{A challenging gray-zone pair: the patient's maiden name at one facility and married name at another give Splink a match probability of just 0.0006, but the structured clinical summaries reveal identical medications, matching biometrics, and overlapping care patterns, enabling MedGemma to correctly classify this as a match with 99.99\% confidence.}
 \label{fig:example}
 \end{figure}
 
 \subsection{Deployment and Feasibility}
 
-\textbf{Hardware and privacy.} MedGemma 4B runs in bf16 on a single consumer GPU (e.g., RTX~3090, {\raise.17ex\hbox{$\scriptstyle\sim$}}\$1{,}500) with all inference local---no patient data leaves the facility, supporting HIPAA/GDPR compliance and air-gapped deployment.
+\textbf{Hardware and privacy.} MedGemma 4B runs in bf16 on a single consumer GPU (e.g., RTX~3090, {\raise.17ex\hbox{$\scriptstyle\sim$}}\$1{,}500) with all inference local: no patient data leaves the facility, supporting HIPAA/GDPR compliance and air-gapped deployment.
 
-\textbf{Cost at scale.} The tiered architecture keeps GPU costs proportional to ambiguity: only gray-zone pairs require LLM inference---from under 5\% of pairs with clean demographics to nearly all in heavily degraded data. In batch mode, MedGemma classifies 20~pairs/second on a datacenter GPU (H100), with sub-second per-pair latency even on consumer hardware (RTX~3090).
+\textbf{Cost at scale.} The tiered architecture keeps GPU costs proportional to ambiguity: only gray-zone pairs require LLM inference, ranging from under 5\% of pairs with clean demographics to nearly all in heavily degraded data. In batch mode, MedGemma classifies 20~pairs/second on a datacenter GPU (H100), with sub-second per-pair latency even on consumer hardware (RTX~3090).
 
-\textbf{Integration.} Input is standard HL7/FHIR demographic and clinical fields. Output is a deduplicated Master Patient Index---a drop-in replacement for existing MPI systems. Match and reject thresholds are configurable, allowing operators to tune the precision--recall trade-off for their clinical context.
+\textbf{Integration.} Input is standard HL7/FHIR demographic and clinical fields. Output is a deduplicated Master Patient Index, a drop-in replacement for existing MPI systems. Match and reject thresholds are configurable, allowing operators to tune the precision--recall trade-off for their clinical context.
 
-\textbf{User experience.} For the ED registrar, ClinFuse means fewer fragmented charts---the MPI has already resolved ambiguous records using clinical evidence. For IT staff, the pipeline automates gray-zone resolution, producing a cleaner index requiring less manual reconciliation.
+\textbf{Operational impact.} ClinFuse produces a more trustworthy Master Patient Index by resolving the ambiguous records that demographic matching alone cannot. For the ED registrar, this means fewer fragmented charts; for IT staff, the pipeline automates gray-zone resolution, reducing manual reconciliation.
 
 \textbf{Confidence and auditability.} Every resolved pair carries its decision source and confidence score, enabling operators to flag uncertain LLM decisions for human review and tune how aggressively ambiguous pairs route to clinical classification.
 
@@ -214,21 +220,7 @@ At an estimated 8--12\% duplication rate~\cite{morris2016} across roughly 36~mil
 
 \subsection{Conclusion}
 
-ClinFuse shows that medical foundation models can serve as infrastructure components---not just diagnostic aids---when embedded in systems that invoke them selectively. If a 4B-parameter model fine-tuned for clinical QA can reduce record fragmentation by 73\% on a task it was never designed for, the broader implication is that medical language understanding is a general-purpose capability applicable wherever clinical reasoning intersects operational systems: patient matching today, but also care-gap detection, formulary reconciliation, and the national-scale identity infrastructure that TEFCA and the MATCH~IT Act demand.
-
-% =====================================================================
-%  ACKNOWLEDGMENTS
-% =====================================================================
-\section*{Acknowledgments}
-
-This work uses MedGemma~\cite{medgemma} (Google Health AI) for clinical classification and Splink~\cite{splink} for probabilistic linkage. Synthetic data generated with Synthea~\cite{walonoski2018}. Developed for the Kaggle MedGemma Impact Challenge~\cite{kaggle2026}.
-
-\smallskip
-\noindent\textbf{Resources:}\\
-Code: \url{https://github.com/abicyclerider/clinfuse}\\
-Model: \url{https://huggingface.co/abicyclerider/medgemma-4b-entity-resolution-text-only}\\
-Dataset: \url{https://huggingface.co/datasets/abicyclerider/entity-resolution-pairs}\\
-Video: \textit{[URL TBD before submission]}
+ClinFuse demonstrates that a compact medical language model---fine-tuned for a task it was never designed for---can substantially reduce patient record fragmentation when embedded in a tiered architecture that invokes it selectively. Running entirely on-premises on consumer hardware, requiring no cloud dependency, and integrating through standard HL7/FHIR interfaces, the system offers a practical path toward the matching accuracy that cross-organizational health information exchange demands and that patient safety requires.
 
 % =====================================================================
 %  REFERENCES
